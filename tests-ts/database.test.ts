@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterEach, describe, expect, test } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
