@@ -1,48 +1,95 @@
 # 原片库
 
-原片库是面向 Windows 本机的抖音原始媒体下载与管理工具。应用通过独立 Chrome 或 Edge 配置保存登录环境，通过本地 Web 界面管理下载任务、图片作品和视频文件。
+[![CI](https://github.com/galaxywk223/original-media-library/actions/workflows/ci.yml/badge.svg)](https://github.com/galaxywk223/original-media-library/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/galaxywk223/original-media-library)](https://github.com/galaxywk223/original-media-library/releases/latest)
+[![License](https://img.shields.io/github/license/galaxywk223/original-media-library)](LICENSE)
+
+原片库是面向 Windows 10/11 x64 的本地抖音原始媒体下载与管理工具。应用使用独立 Edge/Chrome 配置保存登录状态，通过 Electron 桌面界面管理下载任务、图片作品和视频文件。
+
+![下载界面](docs/screenshots/download.png)
 
 ## 功能
 
-- 从分享文案或链接中批量提取抖音作品。
-- 下载原始图片或视频并显示实时进度。
-- 自动索引下载目录中的已有媒体文件。
-- 按作品分组多图内容，提供搜索、筛选和预览。
-- 支持打开文件、资源管理器定位、重命名和移入回收站。
-- SQLite 保存任务与媒体元数据，FFmpeg 生成视频缩略图。
+- 从分享文案、短链接或作品链接中批量提取抖音作品。
+- 下载页面返回的图片或视频资源并显示实时进度。
+- 自动索引本地下载目录，按作品归组多图内容。
+- 提供搜索、媒体类型筛选、排序、网格与列表视图。
+- 支持媒体预览、重命名、打开文件、资源管理器定位和移入回收站。
+- 使用 SQLite 保存设置、任务与媒体索引，不依赖独立服务进程。
+- 使用系统 Edge 或 Chrome 完成登录，不在安装包内捆绑浏览器或 FFmpeg。
 
-## 启动
+## 安装
 
-运行以下命令：
+最新安装包位于 [GitHub Releases](https://github.com/galaxywk223/original-media-library/releases/latest)：
 
-```powershell
-.\start.ps1
+```text
+OriginalMediaLibrary-Setup-1.0.0.exe
 ```
 
-首次启动会安装 Python 和前端依赖并构建 Web 资源。服务仅监听 `127.0.0.1`，随后自动打开默认浏览器。
+安装包未进行商业代码签名，Windows SmartScreen 可能显示未知发布者提示。安装范围为当前用户，卸载时保留应用数据和已下载媒体。
 
-## 开发
+## 使用流程
 
-后端开发服务：
+1. 设置页确认系统 Edge 或 Chrome 可用。
+2. “配置登录”打开独立浏览器窗口并完成抖音登录。
+3. 下载页粘贴分享文案或作品链接并执行解析。
+4. 选择作品并创建下载任务。
+5. 媒体库完成预览、筛选和本地文件管理。
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[test]"
-.\.venv\Scripts\python.exe app.py
-```
-
-前端开发服务：
-
-```powershell
-Set-Location frontend
-npm install
-npm run dev
-```
+![设置界面](docs/screenshots/settings.png)
 
 ## 数据目录
 
 | 路径 | 内容 |
 | --- | --- |
-| `.app-data/library.db` | SQLite 数据库 |
-| `.app-data/thumbnails` | 媒体缩略图缓存 |
-| `.browser-profile` | 独立浏览器登录环境 |
-| `downloads` | 默认下载目录 |
+| `%LOCALAPPDATA%\OriginalMediaLibrary\library.db` | SQLite 数据库 |
+| `%LOCALAPPDATA%\OriginalMediaLibrary\thumbnails` | 缩略图缓存 |
+| `%LOCALAPPDATA%\OriginalMediaLibrary\browser-profile` | 独立浏览器登录环境 |
+| `%USERPROFILE%\Downloads\原片库` | 默认下载目录 |
+
+旧版 Web 应用的工作区数据在开发模式首次启动时自动迁移到本地应用数据目录。下载目录可在设置页修改。
+
+## 开发
+
+```powershell
+npm ci
+npm run dev
+```
+
+生产构建与安装包：
+
+```powershell
+npm run build
+npm run dist
+```
+
+质量检查：
+
+```powershell
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+```
+
+## 技术架构
+
+- Electron 主进程负责窗口生命周期、SQLite、文件系统、下载队列和浏览器自动化。
+- Context Bridge 暴露受限桌面 API，IPC 输入通过 Zod 校验。
+- React、TypeScript、TanStack Query 与 Radix UI 构成渲染层。
+- 自定义 `oml-media://` 协议按媒体 ID 提供受目录边界保护的预览流。
+- electron-vite 负责三层构建，electron-builder 生成 NSIS x64 安装包。
+
+详细边界与数据流参见 [架构说明](docs/ARCHITECTURE.md)。
+
+## 项目边界
+
+- v1 仅支持 Windows 10/11 x64。
+- v1 不包含代码签名、自动更新、托盘模式、遥测、FFmpeg、macOS 或 Linux 构建。
+- 下载能力依赖抖音页面接口与登录状态，平台变更可能导致功能失效。
+- 项目不隶属于抖音、Microsoft 或 Google。
+- 软件仅适用于有权访问和保存的内容。使用行为应遵守适用法律、平台条款和内容权利要求。
+
+## 开源信息
+
+项目使用 [MIT License](LICENSE)。第三方软件许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，隐私边界见 [PRIVACY.md](PRIVACY.md)，安全报告流程见 [SECURITY.md](SECURITY.md)。

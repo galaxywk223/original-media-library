@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, FolderOpen, RefreshCw, X } from 'lucide-react'
+import { CheckCircle2, FolderCog, FolderOpen, LogIn, RefreshCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api'
 import type { Settings } from '../types'
@@ -28,6 +28,8 @@ export function SettingsDialog({ open, settings, onOpenChange }: SettingsDialogP
     },
   })
   const rescan = useMutation({ mutationFn: api.rescan, onSuccess: refresh })
+  const login = useMutation({ mutationFn: api.openLogin, onSuccess: refresh })
+  const openData = useMutation({ mutationFn: api.openDataDirectory })
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -71,13 +73,28 @@ export function SettingsDialog({ open, settings, onOpenChange }: SettingsDialogP
               <strong>{settings?.browser_profile_ready ? '已配置' : '未配置'}</strong>
             </div>
             <div>
-              <CheckCircle2 size={18} className={settings?.ffmpeg_ready ? 'success' : 'muted'} />
-              <span>视频缩略图</span>
-              <strong>{settings?.ffmpeg_ready ? '可用' : 'FFmpeg 不可用'}</strong>
+              <CheckCircle2 size={18} className={settings?.browser_ready ? 'success' : 'muted'} />
+              <span>系统浏览器</span>
+              <strong>{settings?.browser_ready ? '可用' : '未找到'}</strong>
+            </div>
+            <div>
+              <FolderCog size={18} className="muted" />
+              <span>应用数据</span>
+              <button className="text-button" onClick={() => openData.mutate()} type="button">打开目录</button>
+            </div>
+            <div>
+              <CheckCircle2 size={18} className="success" />
+              <span>应用版本</span>
+              <strong>v{settings?.app_version}</strong>
             </div>
           </div>
-          {(save.error || choose.error || rescan.error) ? (
-            <p className="inline-error">{(save.error || choose.error || rescan.error)?.message}</p>
+          <div className="settings-footer-actions">
+            <button className="secondary-button" onClick={() => login.mutate()} disabled={!settings?.browser_ready || login.isPending} type="button">
+              <LogIn size={16} />{settings?.browser_profile_ready ? '重新登录' : '配置登录'}
+            </button>
+          </div>
+          {(save.error || choose.error || rescan.error || login.error || openData.error) ? (
+            <p className="inline-error">{(save.error || choose.error || rescan.error || login.error || openData.error)?.message}</p>
           ) : null}
         </Dialog.Content>
       </Dialog.Portal>

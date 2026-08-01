@@ -123,7 +123,7 @@ function MediaItem({ item, selected, view, onSelect, onOpen }: MediaItemProps) {
   return (
     <article className={`media-item ${selected ? 'is-selected' : ''}`}>
       <button className="media-preview" onClick={onOpen} type="button" aria-label={`预览 ${item.title}`}>
-        {item.cover_asset_id ? <img src={`/api/assets/${item.cover_asset_id}/thumbnail`} alt="" loading="lazy" /> : <span><Images /></span>}
+        {item.cover_asset_id ? <img src={`oml-media://asset/${item.cover_asset_id}/thumbnail`} alt="" loading="lazy" /> : <span><Images /></span>}
         {item.media_type === 'video' ? <i className="play-indicator"><Play size={16} fill="currentColor" /></i> : null}
         {item.item_count > 1 ? <span className="item-count"><Images size={13} />{item.item_count}</span> : null}
       </button>

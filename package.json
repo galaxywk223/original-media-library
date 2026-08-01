@@ -1,0 +1,89 @@
+{
+  "name": "original-media-library",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Windows 本地抖音原始媒体下载与管理工具",
+  "author": "Wang Kai",
+  "license": "MIT",
+  "homepage": "https://github.com/galaxywk223/original-media-library#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/galaxywk223/original-media-library.git"
+  },
+  "bugs": {
+    "url": "https://github.com/galaxywk223/original-media-library/issues"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": ["electron", "react", "typescript", "windows", "media-library", "douyin"],
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "icon": "electron scripts/generate-icon.mjs",
+    "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
+    "dist": "npm run icon && npm run build && electron-builder --win nsis --x64 --publish never",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p frontend/tsconfig.app.json",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.1.15",
+    "@radix-ui/react-tooltip": "1.2.8",
+    "@tanstack/react-query": "5.90.21",
+    "lucide-react": "0.468.0",
+    "puppeteer-core": "25.4.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "1.62.1",
+    "@tailwindcss/vite": "4.1.18",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.1",
+    "@types/node": "24.10.1",
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "9.39.1",
+    "eslint-plugin-react-hooks": "7.0.1",
+    "eslint-plugin-react-refresh": "0.4.24",
+    "jsdom": "27.2.0",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.48.1",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  },
+  "build": {
+    "appId": "com.galaxywk.originalmedialibrary",
+    "productName": "原片库",
+    "artifactName": "OriginalMediaLibrary-Setup-${version}.${ext}",
+    "asar": true,
+    "directories": { "output": "release", "buildResources": "assets" },
+    "files": ["out/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [{ "provider": "github", "owner": "galaxywk223", "repo": "original-media-library" }]
+  }
+}

@@ -8,6 +8,9 @@ __pycache__/
 .pytest_cache/
 *.log
 coverage/
+test-results/
+playwright-report/
+*.lcov
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
@@ -18,3 +21,5 @@ release/
 *.tsbuildinfo
 downloads/
 downloads-test*/
+Thumbs.db
+.DS_Store

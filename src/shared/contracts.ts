@@ -66,3 +66,37 @@ export interface Settings {
   browser_ready: boolean
   app_version: string
 }
+
+export interface CreateJobResult {
+  source_url: string
+  duplicate: boolean
+  existing_collection_id: string | null
+  job: Job | null
+}
+
+export interface LibraryQuery {
+  search: string
+  media_type: string
+  sort: string
+  page?: number
+  page_size?: number
+}
+
+export interface DesktopBridge {
+  parse(text: string): Promise<{ sources: ParsedSource[] }>
+  createJobs(urls: string[], force?: boolean): Promise<CreateJobResult[]>
+  jobs(): Promise<Job[]>
+  cancelJob(id: string): Promise<Job>
+  retryJob(id: string): Promise<Job>
+  library(query: LibraryQuery): Promise<LibraryResult>
+  collection(id: string): Promise<Collection>
+  renameCollection(id: string, title: string): Promise<Collection>
+  libraryAction(action: 'open' | 'reveal' | 'trash', ids: string[]): Promise<{ affected: number }>
+  settings(): Promise<Settings>
+  updateSettings(downloadDir: string): Promise<Settings>
+  selectDirectory(): Promise<Settings>
+  openLogin(): Promise<{ opened: boolean }>
+  openDataDirectory(): Promise<{ opened: boolean }>
+  rescan(): Promise<{ started: boolean }>
+  onSnapshot(callback: () => void): () => void
+}

@@ -23,6 +23,7 @@ export default function App() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState<PageId>(initialPage)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [setupDismissed, setSetupDismissed] = useState(false)
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings })
 
   useEffect(() => {
@@ -32,12 +33,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const source = new EventSource('/api/events')
-    source.addEventListener('snapshot', () => {
+    const unsubscribe = window.originalMedia.onSnapshot(() => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
       void queryClient.invalidateQueries({ queryKey: ['library'] })
+      void queryClient.invalidateQueries({ queryKey: ['settings'] })
     })
-    return () => source.close()
+    return unsubscribe
   }, [queryClient])
 
   const changePage = (next: PageId) => {
@@ -51,7 +52,7 @@ export default function App() {
       title={pageTitles[page]}
       settings={settings.data}
       onPageChange={changePage}
-      onOpenSettings={() => setSettingsOpen(true)}
+      onOpenSettings={() => { setSetupDismissed(false); setSettingsOpen(true) }}
     >
       {page === 'download' ? <DownloadPage /> : null}
       {page === 'library' ? <LibraryPage /> : null}
@@ -59,9 +60,9 @@ export default function App() {
       {settings.data ? (
         <SettingsDialog
           key={settings.data.download_dir}
-          open={settingsOpen}
+          open={settingsOpen || (!settings.data.browser_profile_ready && !setupDismissed)}
           settings={settings.data}
-          onOpenChange={setSettingsOpen}
+          onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSetupDismissed(true) }}
         />
       ) : null}
     </AppShell>

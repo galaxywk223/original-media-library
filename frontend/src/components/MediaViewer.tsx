@@ -58,10 +58,10 @@ export function MediaViewer({ collectionId, onClose }: MediaViewerProps) {
           <Dialog.Description className="sr-only">查看本地媒体文件</Dialog.Description>
           <div className="viewer-stage">
             {asset?.kind === 'video' ? (
-              <video controls autoPlay src={`/api/assets/${asset.id}/content`} />
+              <video controls autoPlay src={`oml-media://asset/${asset.id}/content`} />
             ) : null}
             {asset?.kind === 'image' ? (
-              <img src={`/api/assets/${asset.id}/content`} alt={detail.data?.title || asset.filename} />
+              <img src={`oml-media://asset/${asset.id}/content`} alt={detail.data?.title || asset.filename} />
             ) : null}
             {!asset && !detail.isLoading ? <p className="viewer-empty">媒体文件不存在</p> : null}
             {assets.length > 1 ? (
