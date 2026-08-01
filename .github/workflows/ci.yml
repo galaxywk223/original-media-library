@@ -21,10 +21,27 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run test:e2e
       - run: npm run dist
+      - name: Verify packaged application
+        shell: pwsh
+        run: |
+          $env:ORIGINAL_MEDIA_LIBRARY_DATA_DIR = Join-Path $env:RUNNER_TEMP 'oml-data'
+          $env:ORIGINAL_MEDIA_LIBRARY_DOWNLOAD_DIR = Join-Path $env:RUNNER_TEMP 'oml-downloads'
+          $process = Start-Process -FilePath '.\release\win-unpacked\原片库.exe' -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged self-test failed with exit code $($process.ExitCode)" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: release/OriginalMediaLibrary-Setup-*.exe
           if-no-files-found: error
+
+  desktop-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: xvfb-run --auto-servernum npm run test:e2e
