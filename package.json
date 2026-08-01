@@ -25,7 +25,7 @@
     "build": "npm run typecheck && electron-vite build",
     "icon": "electron scripts/generate-icon.mjs",
     "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
-    "dist": "npm run icon && npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist": "npm run build && electron-builder --win nsis --x64 --publish never",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p frontend/tsconfig.app.json",
     "test": "vitest run",
