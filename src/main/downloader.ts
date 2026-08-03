@@ -1,12 +1,15 @@
 import puppeteer, { type Browser } from 'puppeteer-core'
 import { existsSync } from 'node:fs'
-import { access, mkdir, open } from 'node:fs/promises'
+import { access, mkdir, open, readFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { AppPaths } from './paths'
 import { extractAwemeId, normalizeSourceUrl } from './parser'
 
 const DOUYIN_HOME = 'https://www.douyin.com/'
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
+const DEVTOOLS_PATH = /^\/devtools\/browser\/[A-Za-z0-9._-]+$/
+const RECOVERY_TIMEOUT_MS = 3_000
+const RECOVERY_POLL_MS = 100
 
 export interface DownloadResult {
   sourceUrl: string
@@ -20,6 +23,18 @@ export interface DownloadResult {
 interface Candidate { url: string; kind: 'image' | 'video'; index: number }
 
 export class DownloadCancelled extends Error {}
+export class BrowserProfileRecoveryError extends Error {}
+
+export interface BrowserApi {
+  launch(options: Parameters<typeof puppeteer.launch>[0]): Promise<Browser>
+  connect(options: Parameters<typeof puppeteer.connect>[0]): Promise<Browser>
+}
+
+export interface BrowserDownloaderDependencies {
+  browserApi?: BrowserApi
+  recoveryTimeoutMs?: number
+  recoveryPollMs?: number
+}
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true } catch { return false }
@@ -27,8 +42,15 @@ async function exists(path: string): Promise<boolean> {
 
 export class BrowserDownloader {
   private loginBrowser: Browser | null = null
+  private readonly browserApi: BrowserApi
+  private readonly recoveryTimeoutMs: number
+  private readonly recoveryPollMs: number
 
-  constructor(private readonly paths: AppPaths) {}
+  constructor(private readonly paths: AppPaths, dependencies: BrowserDownloaderDependencies = {}) {
+    this.browserApi = dependencies.browserApi ?? puppeteer
+    this.recoveryTimeoutMs = dependencies.recoveryTimeoutMs ?? RECOVERY_TIMEOUT_MS
+    this.recoveryPollMs = dependencies.recoveryPollMs ?? RECOVERY_POLL_MS
+  }
 
   browserExecutable(): string | null {
     const env = process.env
@@ -55,7 +77,7 @@ export class BrowserDownloader {
     const executablePath = this.browserExecutable()
     if (!executablePath) throw new Error('未找到 Microsoft Edge 或 Google Chrome')
     await mkdir(this.paths.browserProfileDir, { recursive: true })
-    this.loginBrowser = await puppeteer.launch({
+    this.loginBrowser = await this.launchManaged({
       executablePath,
       userDataDir: this.paths.browserProfileDir,
       headless: false,
@@ -75,6 +97,7 @@ export class BrowserDownloader {
   async close(): Promise<void> {
     await this.loginBrowser?.close().catch(() => undefined)
     this.loginBrowser = null
+    await this.cleanupProfileBrowser()
   }
 
   async download(
@@ -88,13 +111,14 @@ export class BrowserDownloader {
     const executablePath = this.browserExecutable()
     if (!executablePath) throw new Error('未找到 Microsoft Edge 或 Google Chrome')
     const url = await normalizeSourceUrl(source)
-    const browser = await puppeteer.launch({
-      executablePath,
-      userDataDir: this.paths.browserProfileDir,
-      headless: true,
-      defaultViewport: { width: 1280, height: 900 },
-    })
+    let browser: Browser | null = null
     try {
+      browser = await this.launchManaged({
+        executablePath,
+        userDataDir: this.paths.browserProfileDir,
+        headless: true,
+        defaultViewport: { width: 1280, height: 900 },
+      })
       const page = (await browser.pages())[0] ?? await browser.newPage()
       await page.setUserAgent(USER_AGENT)
       const detailPromise = new Promise<Record<string, any>>((resolve, reject) => {
@@ -131,7 +155,69 @@ export class BrowserDownloader {
         awemeId: String(detail.aweme_id || extractAwemeId(url) || '') || null, sourceCreatedAt: created,
       }
     } finally {
+      await browser?.close().catch(() => undefined)
+      await this.cleanupProfileBrowser()
+    }
+  }
+
+  private async launchManaged(options: Parameters<typeof puppeteer.launch>[0]): Promise<Browser> {
+    await this.cleanupProfileBrowser()
+    try {
+      return await this.browserApi.launch(options)
+    } catch (launchError) {
+      const recovered = await this.pollForProfileBrowser()
+      if (recovered.browser) return recovered.browser
+      if (recovered.endpointSeen || isProfileLockError(launchError)) {
+        throw new BrowserProfileRecoveryError('后台浏览器占用登录环境且无法自动接管，请重启应用后重试', {
+          cause: launchError,
+        })
+      }
+      throw launchError
+    }
+  }
+
+  private async cleanupProfileBrowser(): Promise<void> {
+    if (this.loginOpen()) return
+    const endpoint = await this.readProfileEndpoint()
+    if (!endpoint) return
+    try {
+      const browser = await this.browserApi.connect({ browserWSEndpoint: endpoint })
       await browser.close().catch(() => undefined)
+    } catch {
+      // A stale port file is harmless; a later launch may replace it.
+    }
+  }
+
+  private async pollForProfileBrowser(): Promise<{ browser: Browser | null; endpointSeen: boolean }> {
+    const deadline = Date.now() + this.recoveryTimeoutMs
+    let endpointSeen = false
+    do {
+      const endpoint = await this.readProfileEndpoint()
+      if (endpoint) {
+        endpointSeen = true
+        try {
+          return { browser: await this.browserApi.connect({ browserWSEndpoint: endpoint }), endpointSeen }
+        } catch {
+          // Edge may write the endpoint before it starts accepting connections.
+        }
+      }
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
+      await delay(Math.min(this.recoveryPollMs, remaining))
+    } while (Date.now() <= deadline)
+    return { browser: null, endpointSeen }
+  }
+
+  private async readProfileEndpoint(): Promise<string | null> {
+    try {
+      const content = await readFile(join(this.paths.browserProfileDir, 'DevToolsActivePort'), 'utf8')
+      const [portText, pathText] = content.split(/\r?\n/, 2).map((line) => line.trim())
+      if (!/^\d{1,5}$/.test(portText) || !DEVTOOLS_PATH.test(pathText)) return null
+      const port = Number(portText)
+      if (!Number.isInteger(port) || port < 1 || port > 65_535) return null
+      return `ws://127.0.0.1:${port}${pathText}`
+    } catch {
+      return null
     }
   }
 
@@ -184,6 +270,15 @@ export class BrowserDownloader {
       throw error
     }
   }
+}
+
+function isProfileLockError(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error)
+  return /profile|processsingleton|user\s*data\s*dir|already running/i.test(text)
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 function safeName(value: unknown): string {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Job } from '../shared/contracts'
 import { AppDatabase, sqliteNow, toIso } from './database'
-import { BrowserDownloader, DownloadCancelled } from './downloader'
+import { BrowserDownloader, BrowserProfileRecoveryError, DownloadCancelled } from './downloader'
 import { LibraryService } from './library'
 
 type Row = Record<string, any>
@@ -156,11 +156,15 @@ export class JobManager {
   }
 }
 
-function friendlyError(error: unknown): string {
+export function friendlyError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
   const lower = text.toLowerCase()
+  if (text.includes('登录浏览器仍在运行') || text.includes('登录浏览器已打开')) return text.slice(0, 300)
+  if (error instanceof BrowserProfileRecoveryError || lower.includes('profile') || lower.includes('processsingleton')
+    || lower.includes('user data dir') || lower.includes('already running')) {
+    return '后台浏览器占用登录环境且无法自动接管，请重启应用后重试'
+  }
   if (lower.includes('cookie') || text.includes('登录')) return '登录状态不可用，请重新打开登录浏览器'
-  if (lower.includes('profile') || lower.includes('processsingleton')) return '登录浏览器仍在运行，请关闭后重试'
   if (lower.includes('timeout') || text.includes('超时')) return '请求超时，请稍后重试'
   return text.slice(0, 300) || '下载失败'
 }
