@@ -20,7 +20,7 @@ function createManager(client = new FakeUpdater(), supported = true) {
   const beforeInstall = vi.fn(async () => undefined)
   const manager = new UpdateManager({
     client: client as unknown as AppUpdater,
-    currentVersion: '1.1.1',
+    currentVersion: '1.1.2',
     supported,
     notify: (status) => notifications.push(status.phase),
     confirmInstall,
@@ -42,7 +42,7 @@ describe('UpdateManager', () => {
     const client = new FakeUpdater()
     client.checkForUpdates.mockImplementation(async () => {
       client.emit('checking-for-update')
-      client.emit('update-not-available', { version: '1.1.1' })
+      client.emit('update-not-available', { version: '1.1.2' })
       return null
     })
     const { manager, notifications } = createManager(client)

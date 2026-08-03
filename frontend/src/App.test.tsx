@@ -9,10 +9,10 @@ beforeEach(() => {
     parse: vi.fn(), createJobs: vi.fn(), jobs: vi.fn(async () => []), cancelJob: vi.fn(), retryJob: vi.fn(),
     library: vi.fn(async () => ({ items: [], total: 0 })), collection: vi.fn(), renameCollection: vi.fn(),
     libraryAction: vi.fn(), settings: vi.fn(async () => ({
-      download_dir: 'D:\\Downloads', browser_profile_ready: true, browser_ready: true, app_version: '1.1.0',
+      download_dir: 'D:\\Downloads', browser_profile_ready: true, browser_ready: true, app_version: '1.1.2',
     })), updateSettings: vi.fn(), selectDirectory: vi.fn(), openLogin: vi.fn(), openDataDirectory: vi.fn(),
     rescan: vi.fn(), getUpdateStatus: vi.fn<() => Promise<UpdateStatus>>(async () => ({
-      phase: 'unsupported', current_version: '1.1.0', available_version: null, download_percent: null,
+      phase: 'unsupported', current_version: '1.1.2', available_version: null, download_percent: null,
       message: '仅正式安装版支持应用内更新',
     })), checkForUpdates: vi.fn(), installUpdate: vi.fn(), onUpdateStatus: vi.fn(() => vi.fn()),
     onSnapshot: vi.fn(() => vi.fn()),

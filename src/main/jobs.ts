@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Job } from '../shared/contracts'
 import { AppDatabase, sqliteNow, toIso } from './database'
 import { BrowserDownloader, BrowserProfileRecoveryError, DownloadCancelled } from './downloader'
-import { LibraryService } from './library'
+import { LibraryService, MediaPathConflictError } from './library'
 
 type Row = Record<string, any>
 
@@ -37,6 +37,24 @@ export class JobManager {
     const queued = db.prepare("SELECT id FROM download_jobs WHERE status = 'queued' ORDER BY created_at").all() as Row[]
     this.queue.push(...queued.map((row) => String(row.id)))
     void this.processNext()
+  }
+
+  async recoverIndexedFailures(): Promise<number> {
+    const rows = this.database.connection.prepare(`SELECT * FROM download_jobs
+      WHERE status = 'failed' AND collection_id IS NULL
+        AND error = 'UNIQUE constraint failed: media_assets.path'
+        AND aweme_id IS NOT NULL AND completed_at IS NOT NULL`).all() as Row[]
+    let recovered = 0
+    for (const row of rows) {
+      const collection = await this.library.recoverIndexedDownload({
+        jobId: String(row.id), awemeId: String(row.aweme_id), sourceUrl: String(row.source_url),
+        outputDir: String(row.output_dir), downloadedBytes: Number(row.downloaded_bytes),
+        createdAt: String(row.created_at), completedAt: String(row.completed_at),
+      })
+      if (collection) recovered += 1
+    }
+    if (recovered) this.notify()
+    return recovered
   }
 
   hasActive(): boolean {
@@ -160,6 +178,9 @@ export function friendlyError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
   const lower = text.toLowerCase()
   if (text.includes('登录浏览器仍在运行') || text.includes('登录浏览器已打开')) return text.slice(0, 300)
+  if (error instanceof MediaPathConflictError || lower.includes('unique constraint failed: media_assets.path')) {
+    return error instanceof MediaPathConflictError ? text : '媒体文件已存在于媒体库，未自动合并'
+  }
   if (error instanceof BrowserProfileRecoveryError || lower.includes('profile') || lower.includes('processsingleton')
     || lower.includes('user data dir') || lower.includes('already running')) {
     return '后台浏览器占用登录环境且无法自动接管，请重启应用后重试'

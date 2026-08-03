@@ -24,7 +24,7 @@
 最新安装包位于 [GitHub Releases](https://github.com/galaxywk223/original-media-library/releases/latest)：
 
 ```text
-MediaDownloader-Setup-1.1.1.exe
+MediaDownloader-Setup-1.1.2.exe
 ```
 
 安装包未进行商业代码签名，Windows SmartScreen 可能显示未知发布者提示。安装范围为当前用户，卸载时保留应用数据和已下载媒体。
@@ -32,6 +32,8 @@ MediaDownloader-Setup-1.1.1.exe
 `v1.0.0` 不包含应用内更新模块，需要手动安装 `v1.1.0` 或更高版本完成一次升级。`v1.1.0` 起可在设置页检查并安装后续更新。
 
 `v1.1.1` 修复应用专属浏览器在启动接管失败后残留于后台的问题。下载任务会自动接管并清理该专属实例，不影响日常使用的 Edge 或 Chrome。
+
+`v1.1.2` 修复目录自动扫描与下载任务同时登记媒体时的索引冲突，并自动恢复证据完整的历史失败任务。
 
 ## 使用流程
 

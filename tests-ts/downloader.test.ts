@@ -252,5 +252,7 @@ describe('BrowserDownloader profile recovery', () => {
       .toBe('登录浏览器仍在运行，请关闭后重试')
     expect(friendlyError(new Error('Failed to create ProcessSingleton for profile')))
       .toBe('后台浏览器占用登录环境且无法自动接管，请重启应用后重试')
+    expect(friendlyError(new Error('UNIQUE constraint failed: media_assets.path')))
+      .toBe('媒体文件已存在于媒体库，未自动合并')
   })
 })

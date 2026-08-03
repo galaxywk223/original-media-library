@@ -36,8 +36,9 @@ export class AppServices {
     }
     const settings = this.settingsRow()
     await mkdir(String(settings.download_dir), { recursive: true })
-    this.startWatcher(String(settings.download_dir))
+    await this.jobs.recoverIndexedFailures()
     await this.library.scan(String(settings.download_dir))
+    this.startWatcher(String(settings.download_dir))
     this.jobs.start()
   }
 

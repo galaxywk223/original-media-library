@@ -14,6 +14,32 @@ const INVALID_FILENAME = /[<>:"/\\|?*\r\n]+/g
 
 type Row = Record<string, any>
 
+interface PreparedAsset {
+  id: string
+  path: string
+  filename: string
+  kind: 'image' | 'video'
+  mimeType: string
+  extension: string
+  size: number
+  width: number | null
+  height: number | null
+  sequence: number
+  modifiedAt: string
+}
+
+export interface IndexedDownloadRecovery {
+  jobId: string
+  awemeId: string
+  sourceUrl: string
+  outputDir: string
+  downloadedBytes: number
+  createdAt: string
+  completedAt: string
+}
+
+export class MediaPathConflictError extends Error {}
+
 function id(): string {
   return randomUUID().replaceAll('-', '')
 }
@@ -39,6 +65,7 @@ function assetFromRow(row: Row): Asset {
 
 export class LibraryService {
   private scanning = false
+  private mutationTail: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly database: AppDatabase,
@@ -50,66 +77,68 @@ export class LibraryService {
     if (this.scanning) return 0
     this.scanning = true
     try {
-      await mkdir(root, { recursive: true })
-      const files = await this.mediaFiles(root)
-      const db = this.database.connection
-      const existing = db.prepare('SELECT * FROM media_assets').all() as Row[]
-      const existingByPath = new Map(existing.map((row) => [resolve(String(row.path)).toLowerCase(), row]))
-      const current = new Set(files.map((path) => resolve(path).toLowerCase()))
+      return await this.serialize(async () => {
+        await mkdir(root, { recursive: true })
+        const files = await this.mediaFiles(root)
+        const db = this.database.connection
+        const existing = db.prepare('SELECT * FROM media_assets').all() as Row[]
+        const existingByPath = new Map(existing.map((row) => [resolve(String(row.path)).toLowerCase(), row]))
+        const current = new Set(files.map((path) => resolve(path).toLowerCase()))
 
-      db.exec('BEGIN')
-      try {
-        for (const row of existing) {
-          const path = resolve(String(row.path))
-          if (this.inside(path, root) && !current.has(path.toLowerCase())) {
-            db.prepare('DELETE FROM media_assets WHERE id = ?').run(row.id)
+        db.exec('BEGIN')
+        try {
+          for (const row of existing) {
+            const path = resolve(String(row.path))
+            if (this.inside(path, root) && !current.has(path.toLowerCase())) {
+              db.prepare('DELETE FROM media_assets WHERE id = ?').run(row.id)
+            }
+          }
+          db.exec('COMMIT')
+        } catch (error) {
+          db.exec('ROLLBACK')
+          throw error
+        }
+
+        const groups = new Map<string, Array<{ path: string; sequence: number }>>()
+        for (const path of files) {
+          const key = resolve(path).toLowerCase()
+          if (existingByPath.has(key)) {
+            const info = await stat(path)
+            db.prepare('UPDATE media_assets SET filename = ?, size = ?, modified_at = ? WHERE id = ?')
+              .run(basename(path), info.size, sqliteNow(info.mtime), existingByPath.get(key)!.id)
+            continue
+          }
+          const extension = extname(path)
+          const stem = basename(path, extension)
+          const match = stem.match(SEQUENCE)
+          const base = match?.[1] ?? stem
+          const sequence = Number(match?.[2] ?? 1)
+          const groupKey = `${dirname(path).toLowerCase()}\u0000${base}`
+          const items = groups.get(groupKey) ?? []
+          items.push({ path, sequence })
+          groups.set(groupKey, items)
+        }
+
+        let added = 0
+        for (const items of groups.values()) {
+          items.sort((a, b) => a.sequence - b.sequence)
+          const collectionId = id()
+          const now = sqliteNow()
+          const title = basename(items[0].path, extname(items[0].path)).replace(SEQUENCE, '$1')
+          const mediaType = this.collectionType(items.map((item) => item.path))
+          db.prepare(`INSERT INTO media_collections
+            (id, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
+            VALUES (?, NULL, NULL, ?, NULL, ?, ?, 1, NULL, ?, ?)`)
+            .run(collectionId, title, mediaType, items.length, now, now)
+          for (const item of items) {
+            await this.insertAsset(collectionId, item.path, item.sequence)
+            added += 1
           }
         }
-        db.exec('COMMIT')
-      } catch (error) {
-        db.exec('ROLLBACK')
-        throw error
-      }
-
-      const groups = new Map<string, Array<{ path: string; sequence: number }>>()
-      for (const path of files) {
-        const key = resolve(path).toLowerCase()
-        if (existingByPath.has(key)) {
-          const info = await stat(path)
-          db.prepare('UPDATE media_assets SET filename = ?, size = ?, modified_at = ? WHERE id = ?')
-            .run(basename(path), info.size, sqliteNow(info.mtime), existingByPath.get(key)!.id)
-          continue
-        }
-        const extension = extname(path)
-        const stem = basename(path, extension)
-        const match = stem.match(SEQUENCE)
-        const base = match?.[1] ?? stem
-        const sequence = Number(match?.[2] ?? 1)
-        const groupKey = `${dirname(path).toLowerCase()}\u0000${base}`
-        const items = groups.get(groupKey) ?? []
-        items.push({ path, sequence })
-        groups.set(groupKey, items)
-      }
-
-      let added = 0
-      for (const items of groups.values()) {
-        items.sort((a, b) => a.sequence - b.sequence)
-        const collectionId = id()
-        const now = sqliteNow()
-        const title = basename(items[0].path, extname(items[0].path)).replace(SEQUENCE, '$1')
-        const mediaType = this.collectionType(items.map((item) => item.path))
-        db.prepare(`INSERT INTO media_collections
-          (id, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
-          VALUES (?, NULL, NULL, ?, NULL, ?, ?, 1, NULL, ?, ?)`)
-          .run(collectionId, title, mediaType, items.length, now, now)
-        for (const item of items) {
-          await this.insertAsset(collectionId, item.path, item.sequence)
-          added += 1
-        }
-      }
-      this.cleanupCollections()
-      if (added || files.length !== existing.length) this.notify()
-      return added
+        this.cleanupCollections()
+        if (added || files.length !== existing.length) this.notify()
+        return added
+      })
     } finally {
       this.scanning = false
     }
@@ -119,19 +148,111 @@ export class LibraryService {
     title: string; author: string | null; sourceUrl: string; awemeId: string | null;
     sourceCreatedAt: string | null; paths: string[]
   }): Promise<Collection> {
-    const db = this.database.connection
-    const collectionId = id()
-    const now = sqliteNow()
-    db.prepare(`INSERT INTO media_collections
-      (id, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
-      .run(collectionId, input.awemeId, input.sourceUrl, input.title.trim() || '未命名作品', input.author,
-        this.collectionType(input.paths), input.paths.length, input.sourceCreatedAt, now, now)
-    for (let index = 0; index < input.paths.length; index += 1) {
-      await this.insertAsset(collectionId, input.paths[index], index + 1)
-    }
-    this.notify()
-    return this.getCollection(collectionId)
+    return this.serialize(async () => {
+      const db = this.database.connection
+      const paths = input.paths.map((path) => resolve(path))
+      const pathKeys = paths.map((path) => path.toLowerCase())
+      if (new Set(pathKeys).size !== paths.length) throw new MediaPathConflictError('下载结果包含重复文件路径')
+      const placeholders = paths.map(() => '?').join(', ')
+      const existing = paths.length ? db.prepare(`SELECT a.*, c.imported, c.aweme_id, c.source_url
+        FROM media_assets a JOIN media_collections c ON c.id = a.collection_id
+        WHERE LOWER(a.path) IN (${placeholders})`).all(...pathKeys) as Row[] : []
+      const official = existing.filter((row) => !row.imported)
+      if (official.length) {
+        const collectionIds = new Set(official.map((row) => String(row.collection_id)))
+        const collectionId = collectionIds.size === 1 ? [...collectionIds][0] : null
+        const sameDownload = collectionId && existing.length === paths.length
+          && existing.every((row) => String(row.collection_id) === collectionId)
+          && official.every((row) => input.awemeId
+            ? row.aweme_id === input.awemeId : row.source_url === input.sourceUrl)
+        if (sameDownload) return this.getCollection(collectionId)
+        throw new MediaPathConflictError('媒体文件已存在于其他作品，未自动合并')
+      }
+
+      const existingByPath = new Map(existing.map((row) => [resolve(String(row.path)).toLowerCase(), row]))
+      const missing = paths.flatMap((path, index) => existingByPath.has(pathKeys[index])
+        ? [] : [{ path, sequence: index + 1 }])
+      const prepared = await Promise.all(missing.map((item) => this.prepareAsset(item.path, item.sequence)))
+      const collectionId = id()
+      const now = sqliteNow()
+      let preparedIndex = 0
+      db.exec('BEGIN')
+      try {
+        db.prepare(`INSERT INTO media_collections
+          (id, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
+          .run(collectionId, input.awemeId, input.sourceUrl, input.title.trim() || '未命名作品', input.author,
+            this.collectionType(paths), paths.length, input.sourceCreatedAt, now, now)
+        for (let index = 0; index < paths.length; index += 1) {
+          const existingAsset = existingByPath.get(pathKeys[index])
+          if (existingAsset) {
+            db.prepare('UPDATE media_assets SET collection_id = ?, sequence = ? WHERE id = ?')
+              .run(collectionId, index + 1, existingAsset.id)
+          } else {
+            this.insertPreparedAsset(collectionId, prepared[preparedIndex++])
+          }
+        }
+        this.cleanupCollections()
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+      for (const asset of prepared) void this.thumbnailPath(asset.id, dirname(asset.path)).catch(() => undefined)
+      this.notify()
+      return this.getCollection(collectionId)
+    })
+  }
+
+  async recoverIndexedDownload(input: IndexedDownloadRecovery): Promise<Collection | null> {
+    return this.serialize(async () => {
+      const db = this.database.connection
+      const emptyCollections = db.prepare(`SELECT c.* FROM media_collections c
+        LEFT JOIN media_assets a ON a.collection_id = c.id
+        WHERE c.aweme_id = ? AND c.source_url = ? AND c.created_at BETWEEN ? AND ?
+        GROUP BY c.id HAVING COUNT(a.id) = 0`)
+        .all(input.awemeId, input.sourceUrl, input.createdAt, input.completedAt) as Row[]
+      if (emptyCollections.length !== 1) return null
+      const empty = emptyCollections[0]
+      const candidates = db.prepare(`SELECT c.*, COUNT(a.id) AS asset_count, SUM(a.size) AS total_size
+        FROM media_collections c JOIN media_assets a ON a.collection_id = c.id
+        WHERE c.imported = 1 AND c.title = ? AND c.media_type = ? AND c.created_at BETWEEN ? AND ?
+        GROUP BY c.id HAVING COUNT(a.id) = ? AND SUM(a.size) = ?`)
+        .all(empty.title, empty.media_type, input.createdAt, input.completedAt,
+          empty.item_count, input.downloadedBytes) as Row[]
+      const valid: Row[] = []
+      for (const candidate of candidates) {
+        const assets = db.prepare('SELECT * FROM media_assets WHERE collection_id = ?').all(candidate.id) as Row[]
+        if (!assets.every((asset) => this.inside(String(asset.path), input.outputDir))) continue
+        const current = await Promise.all(assets.map(async (asset) => {
+          try { return (await stat(String(asset.path))).size === Number(asset.size) } catch { return false }
+        }))
+        if (current.every(Boolean)) valid.push(candidate)
+      }
+      if (valid.length !== 1) return null
+
+      const candidate = valid[0]
+      const now = sqliteNow()
+      db.exec('BEGIN')
+      try {
+        db.prepare(`UPDATE media_collections SET aweme_id = ?, source_url = ?, title = ?, author = ?,
+          imported = 0, source_created_at = ?, updated_at = ? WHERE id = ?`)
+          .run(empty.aweme_id, empty.source_url, empty.title, empty.author,
+            empty.source_created_at, now, candidate.id)
+        db.prepare('DELETE FROM media_collections WHERE id = ?').run(empty.id)
+        const update = db.prepare(`UPDATE download_jobs SET title = ?, status = 'completed', progress = 1,
+          current_item = ?, total_items = ?, collection_id = ?, error = NULL, completed_at = ?, updated_at = ?
+          WHERE id = ? AND status = 'failed' AND collection_id IS NULL`)
+          .run(empty.title, candidate.asset_count, candidate.asset_count, candidate.id, now, now, input.jobId)
+        if (Number(update.changes) !== 1) throw new Error('待修复任务状态已变化')
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+      this.notify()
+      return this.getCollection(String(candidate.id))
+    })
   }
 
   query(query: LibraryQuery): LibraryResult {
@@ -255,6 +376,12 @@ export class LibraryService {
   }
 
   private async insertAsset(collectionId: string, path: string, sequence: number): Promise<void> {
+    const asset = await this.prepareAsset(path, sequence)
+    this.insertPreparedAsset(collectionId, asset)
+    void this.thumbnailPath(asset.id, dirname(asset.path)).catch(() => undefined)
+  }
+
+  private async prepareAsset(path: string, sequence: number): Promise<PreparedAsset> {
     const info = await stat(path)
     const extension = extname(path).toLowerCase()
     const kind: 'image' | 'video' = IMAGES.has(extension) ? 'image' : 'video'
@@ -265,12 +392,18 @@ export class LibraryService {
       const size = nativeImage.createFromPath(path).getSize()
       if (size.width && size.height) { width = size.width; height = size.height }
     }
+    return {
+      id: assetId, path: resolve(path), filename: basename(path), kind, mimeType: mimeFor(path, kind),
+      extension: extension.slice(1), size: info.size, width, height, sequence, modifiedAt: sqliteNow(info.mtime),
+    }
+  }
+
+  private insertPreparedAsset(collectionId: string, asset: PreparedAsset): void {
     this.database.connection.prepare(`INSERT INTO media_assets
       (id, collection_id, path, filename, kind, mime_type, extension, size, width, height, duration, sequence, thumbnail_path, modified_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?)`)
-      .run(assetId, collectionId, resolve(path), basename(path), kind, mimeFor(path, kind), extension.slice(1), info.size,
-        width, height, sequence, sqliteNow(info.mtime))
-    void this.thumbnailPath(assetId, dirname(path)).catch(() => undefined)
+      .run(asset.id, collectionId, asset.path, asset.filename, asset.kind, asset.mimeType, asset.extension, asset.size,
+        asset.width, asset.height, asset.sequence, asset.modifiedAt)
   }
 
   private collectionFromRow(row: Row, includeAssets: boolean): Collection {
@@ -295,8 +428,17 @@ export class LibraryService {
 
   private cleanupCollections(): void {
     const db = this.database.connection
-    db.exec(`DELETE FROM media_collections WHERE NOT EXISTS
-      (SELECT 1 FROM media_assets WHERE media_assets.collection_id = media_collections.id)`)
+    db.exec(`DELETE FROM media_collections
+      WHERE NOT EXISTS (SELECT 1 FROM media_assets WHERE media_assets.collection_id = media_collections.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM download_jobs
+          WHERE download_jobs.status = 'failed'
+            AND download_jobs.collection_id IS NULL
+            AND download_jobs.error = 'UNIQUE constraint failed: media_assets.path'
+            AND download_jobs.aweme_id = media_collections.aweme_id
+            AND download_jobs.source_url = media_collections.source_url
+            AND media_collections.created_at BETWEEN download_jobs.created_at AND download_jobs.completed_at
+        )`)
     const rows = db.prepare(`SELECT collection_id, COUNT(*) AS count,
       COUNT(DISTINCT kind) AS kinds, MIN(kind) AS kind FROM media_assets GROUP BY collection_id`).all() as Row[]
     for (const row of rows) {
@@ -331,5 +473,17 @@ export class LibraryService {
 
   private requireInside(path: string, root: string): void {
     if (!this.inside(path, root)) throw new Error('文件不在当前下载目录内')
+  }
+
+  private async serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTail
+    let release!: () => void
+    this.mutationTail = new Promise<void>((resolvePromise) => { release = resolvePromise })
+    await previous
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
   }
 }
