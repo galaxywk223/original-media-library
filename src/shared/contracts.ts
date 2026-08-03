@@ -1,5 +1,15 @@
 export type PageId = 'download' | 'library' | 'tasks'
 
+export type UpdatePhase = 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
+
+export interface UpdateStatus {
+  phase: UpdatePhase
+  current_version: string
+  available_version: string | null
+  download_percent: number | null
+  message: string | null
+}
+
 export interface ParsedSource {
   url: string
   aweme_id: string | null
@@ -98,5 +108,9 @@ export interface DesktopBridge {
   openLogin(): Promise<{ opened: boolean }>
   openDataDirectory(): Promise<{ opened: boolean }>
   rescan(): Promise<{ started: boolean }>
+  getUpdateStatus(): Promise<UpdateStatus>
+  checkForUpdates(): Promise<UpdateStatus>
+  installUpdate(): Promise<{ started: boolean }>
+  onUpdateStatus(callback: (status: UpdateStatus) => void): () => void
   onSnapshot(callback: () => void): () => void
 }

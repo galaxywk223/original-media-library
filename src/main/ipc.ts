@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { AppServices } from './services'
+import type { UpdateManager } from './updater'
 
 const id = z.string().regex(/^[a-f0-9]{32}$/i)
 const parseRequest = z.object({ text: z.string().min(1) })
@@ -10,7 +11,7 @@ const libraryQuery = z.object({
   page: z.number().int().positive().optional(), page_size: z.number().int().min(1).max(200).optional(),
 })
 
-export function registerIpc(services: AppServices): void {
+export function registerIpc(services: AppServices, updates: UpdateManager): void {
   ipcMain.handle('sources:parse', (_, payload) => services.parse(parseRequest.parse(payload).text))
   ipcMain.handle('jobs:create', (_, payload) => {
     const input = createJobsRequest.parse(payload)
@@ -35,4 +36,7 @@ export function registerIpc(services: AppServices): void {
   ipcMain.handle('auth:open-login', () => services.openLogin())
   ipcMain.handle('system:open-data-directory', () => services.openDataDirectory())
   ipcMain.handle('library:rescan', () => services.rescan())
+  ipcMain.handle('updates:get', () => updates.getStatus())
+  ipcMain.handle('updates:check', () => updates.check())
+  ipcMain.handle('updates:install', () => updates.install())
 }

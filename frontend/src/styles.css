@@ -185,6 +185,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .capability-list { display: grid; border-top: 1px solid var(--line); }
 .capability-list > div { min-height: 48px; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; padding: 0 22px; border-bottom: 1px solid #ececef; font-size: 12px; }
 .capability-list strong { color: #656970; font-weight: 600; }
+.capability-list > .update-status-row { min-height: 64px; padding-top: 8px; padding-bottom: 8px; }
+.update-copy { min-width: 0; display: grid; gap: 3px; }
+.update-copy > span:first-child { font-weight: 500; }
+.update-copy small { overflow: hidden; color: var(--muted); font-size: 11px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.update-action { min-width: 72px; padding: 0 4px; }
+.update-progress { width: min(210px, 100%); height: 3px; overflow: hidden; background: #e4e5e8; border-radius: 2px; }
+.update-progress > span { display: block; height: 100%; background: var(--accent); transition: width .18s ease; }
 .settings-footer-actions { display: flex; justify-content: flex-end; padding: 16px 22px; }
 
 .viewer-overlay { background: rgba(15,17,20,.82); }

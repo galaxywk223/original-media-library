@@ -23,11 +23,14 @@ test('desktop shell renders and navigates to the empty library', async () => {
   })
   try {
     const window = await application.firstWindow()
-    await expect(window).toHaveTitle('原片库')
+    await expect(window).toHaveTitle('素材下载器')
+    await expect(window.getByLabel('素材下载器')).toBeVisible()
     await expect(window.getByRole('heading', { name: '粘贴分享内容' })).toBeVisible()
     await window.getByRole('button', { name: '媒体库' }).click()
     await expect(window.getByRole('heading', { name: '媒体库', exact: true })).toBeVisible()
     await expect(window.getByRole('heading', { name: '媒体库为空' })).toBeVisible()
+    await window.getByRole('button', { name: '设置' }).click()
+    await expect(window.getByText('仅正式安装版支持应用内更新')).toBeVisible()
   } finally {
     await application.close()
     await rm(dataDir, { recursive: true, force: true })

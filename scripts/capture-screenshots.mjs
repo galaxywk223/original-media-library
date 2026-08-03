@@ -27,7 +27,7 @@ try {
   await window.screenshot({ path: join(outputDir, 'download.png') })
   await window.getByRole('button', { name: '设置' }).click()
   await window.getByRole('heading', { name: '设置', exact: true }).waitFor()
-  await window.getByLabel('下载目录').fill('C:\\Users\\Public\\Downloads\\原片库')
+  await window.getByLabel('下载目录').fill('C:\\Users\\Public\\Downloads\\素材下载器')
   await window.screenshot({ path: join(outputDir, 'settings.png') })
 } finally {
   await application.close()

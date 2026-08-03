@@ -1,8 +1,8 @@
 {
   "name": "original-media-library",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": false,
-  "description": "Windows 本地抖音原始媒体下载与管理工具",
+  "description": "Windows 本地抖音素材下载与管理工具",
   "author": "Wang Kai",
   "license": "MIT",
   "homepage": "https://github.com/galaxywk223/original-media-library#readme",
@@ -17,7 +17,14 @@
     "node": ">=22.12.0",
     "npm": ">=10.0.0"
   },
-  "keywords": ["electron", "react", "typescript", "windows", "media-library", "douyin"],
+  "keywords": [
+    "electron",
+    "react",
+    "typescript",
+    "windows",
+    "media-library",
+    "douyin"
+  ],
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
@@ -36,6 +43,7 @@
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-tooltip": "1.2.8",
     "@tanstack/react-query": "5.90.21",
+    "electron-updater": "6.8.9",
     "lucide-react": "0.468.0",
     "puppeteer-core": "25.4.0",
     "react": "19.0.0",
@@ -67,13 +75,26 @@
   },
   "build": {
     "appId": "com.galaxywk.originalmedialibrary",
-    "productName": "原片库",
-    "artifactName": "OriginalMediaLibrary-Setup-${version}.${ext}",
+    "productName": "素材下载器",
+    "artifactName": "MediaDownloader-Setup-${version}.${ext}",
     "asar": true,
-    "directories": { "output": "release", "buildResources": "assets" },
-    "files": ["out/**/*", "package.json"],
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.png"
     },
     "nsis": {
@@ -84,6 +105,12 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
     },
-    "publish": [{ "provider": "github", "owner": "galaxywk223", "repo": "original-media-library" }]
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "galaxywk223",
+        "repo": "original-media-library"
+      }
+    ]
   }
 }

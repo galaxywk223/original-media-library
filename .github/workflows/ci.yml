@@ -27,12 +27,15 @@ jobs:
         run: |
           $env:ORIGINAL_MEDIA_LIBRARY_DATA_DIR = Join-Path $env:RUNNER_TEMP 'oml-data'
           $env:ORIGINAL_MEDIA_LIBRARY_DOWNLOAD_DIR = Join-Path $env:RUNNER_TEMP 'oml-downloads'
-          $process = Start-Process -FilePath '.\release\win-unpacked\原片库.exe' -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          $process = Start-Process -FilePath '.\release\win-unpacked\素材下载器.exe' -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Packaged self-test failed with exit code $($process.ExitCode)" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: release/OriginalMediaLibrary-Setup-*.exe
+          path: |
+            release/MediaDownloader-Setup-*.exe
+            release/MediaDownloader-Setup-*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   desktop-e2e:

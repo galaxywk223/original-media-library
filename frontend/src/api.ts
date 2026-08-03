@@ -1,4 +1,4 @@
-import type { Collection, Job, LibraryResult, ParsedSource, Settings } from './types'
+import type { Collection, Job, LibraryResult, ParsedSource, Settings, UpdateStatus } from './types'
 
 async function call<T>(operation: () => Promise<T>): Promise<T> {
   try {
@@ -27,4 +27,7 @@ export const api = {
   openLogin: () => call<{ opened: boolean }>(window.originalMedia.openLogin),
   openDataDirectory: () => call<{ opened: boolean }>(window.originalMedia.openDataDirectory),
   rescan: () => call<{ started: boolean }>(window.originalMedia.rescan),
+  getUpdateStatus: () => call<UpdateStatus>(window.originalMedia.getUpdateStatus),
+  checkForUpdates: () => call<UpdateStatus>(window.originalMedia.checkForUpdates),
+  installUpdate: () => call<{ started: boolean }>(window.originalMedia.installUpdate),
 }

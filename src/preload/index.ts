@@ -17,6 +17,14 @@ const bridge: DesktopBridge = {
   openLogin: () => ipcRenderer.invoke('auth:open-login'),
   openDataDirectory: () => ipcRenderer.invoke('system:open-data-directory'),
   rescan: () => ipcRenderer.invoke('library:rescan'),
+  getUpdateStatus: () => ipcRenderer.invoke('updates:get'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
+  onUpdateStatus: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status)
+    ipcRenderer.on('events:update-status', listener)
+    return () => ipcRenderer.removeListener('events:update-status', listener)
+  },
   onSnapshot: (callback) => {
     const listener = () => callback()
     ipcRenderer.on('events:snapshot', listener)

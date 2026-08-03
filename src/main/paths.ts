@@ -31,7 +31,7 @@ export async function buildPaths(): Promise<AppPaths> {
     database: join(dataDir, 'library.db'),
     thumbnailDir: join(dataDir, 'thumbnails'),
     browserProfileDir: join(dataDir, 'browser-profile'),
-    defaultDownloadDir: process.env.ORIGINAL_MEDIA_LIBRARY_DOWNLOAD_DIR || join(app.getPath('downloads'), '原片库'),
+    defaultDownloadDir: process.env.ORIGINAL_MEDIA_LIBRARY_DOWNLOAD_DIR || join(app.getPath('downloads'), '素材下载器'),
   }
   await mkdir(paths.thumbnailDir, { recursive: true })
   await mkdir(paths.defaultDownloadDir, { recursive: true })
