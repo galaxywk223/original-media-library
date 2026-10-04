@@ -38,7 +38,7 @@ export interface Job {
 export interface Asset {
   id: string
   filename: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'audio'
   mime_type: string
   extension: string
   size: number
@@ -54,7 +54,7 @@ export interface Collection {
   source_url: string | null
   title: string
   author: string | null
-  media_type: 'image' | 'video' | 'mixed'
+  media_type: 'image' | 'video' | 'audio' | 'mixed'
   item_count: number
   imported: boolean
   source_created_at: string | null
@@ -100,6 +100,7 @@ export interface DesktopBridge {
   retryJob(id: string): Promise<Job>
   library(query: LibraryQuery): Promise<LibraryResult>
   collection(id: string): Promise<Collection>
+  extractAudio(collectionId: string, assetId: string): Promise<Collection>
   renameCollection(id: string, title: string): Promise<Collection>
   libraryAction(action: 'open' | 'reveal' | 'trash', ids: string[]): Promise<{ affected: number }>
   settings(): Promise<Settings>

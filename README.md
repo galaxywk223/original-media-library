@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/galaxywk223/original-media-library)](https://github.com/galaxywk223/original-media-library/releases/latest)
 [![License](https://img.shields.io/github/license/galaxywk223/original-media-library)](LICENSE)
 
-素材下载器是面向 Windows 10/11 x64 的本地抖音素材下载与管理工具。应用使用独立 Edge/Chrome 配置保存登录状态，通过 Electron 桌面界面管理下载任务、图片作品和视频文件。
+素材下载器是面向 Windows 10/11 x64 的本地抖音素材下载与管理工具。应用使用独立 Edge/Chrome 配置保存登录状态，通过 Electron 桌面界面管理下载任务、图片作品、视频文件和音频文件。
 
 ![下载界面](docs/screenshots/download.png)
 
@@ -12,11 +12,12 @@
 
 - 从分享文案、短链接或作品链接中批量提取抖音作品。
 - 下载页面返回的图片或视频资源并显示实时进度。
+- 从已下载的视频提取 MP3 音频，输出码率为 192 kbps。
 - 自动索引本地下载目录，按作品归组多图内容。
 - 提供搜索、媒体类型筛选、排序、网格与列表视图。
 - 支持媒体预览、重命名、打开文件、资源管理器定位和移入回收站。
 - 使用 SQLite 保存设置、任务与媒体索引，不依赖独立服务进程。
-- 使用系统 Edge 或 Chrome 完成登录，不在安装包内捆绑浏览器或 FFmpeg。
+- 使用系统 Edge 或 Chrome 完成登录，安装包内置 FFmpeg 音频转换引擎。
 - 启动后自动检查 GitHub Release，支持后台下载并重启安装更新。
 
 ## 安装
@@ -24,7 +25,7 @@
 最新安装包位于 [GitHub Releases](https://github.com/galaxywk223/original-media-library/releases/latest)：
 
 ```text
-MediaDownloader-Setup-1.1.2.exe
+MediaDownloader-Setup-1.2.0.exe
 ```
 
 安装包未进行商业代码签名，Windows SmartScreen 可能显示未知发布者提示。安装范围为当前用户，卸载时保留应用数据和已下载媒体。
@@ -91,8 +92,8 @@ npm run test:e2e
 
 ## 项目边界
 
-- v1 仅支持 Windows 10/11 x64。
-- v1 不包含代码签名、托盘模式、遥测、FFmpeg、macOS 或 Linux 构建。
+- 当前版本仅支持 Windows 10/11 x64。
+- 当前版本不包含代码签名、托盘模式、遥测、macOS 或 Linux 构建。
 - 下载能力依赖抖音页面接口与登录状态，平台变更可能导致功能失效。
 - 项目不隶属于抖音、Microsoft 或 Google。
 - 软件仅适用于有权访问和保存的内容。使用行为应遵守适用法律、平台条款和内容权利要求。

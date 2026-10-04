@@ -9,6 +9,7 @@ const bridge: DesktopBridge = {
   retryJob: (id) => ipcRenderer.invoke('jobs:retry', { id }),
   library: (query: LibraryQuery) => ipcRenderer.invoke('library:list', query),
   collection: (id) => ipcRenderer.invoke('library:get', { id }),
+  extractAudio: (collectionId, assetId) => ipcRenderer.invoke('audio:extract', { collectionId, assetId }),
   renameCollection: (id, title) => ipcRenderer.invoke('library:rename', { id, title }),
   libraryAction: (action, ids) => ipcRenderer.invoke('library:action', { action, ids }),
   settings: () => ipcRenderer.invoke('settings:get'),

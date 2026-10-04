@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Grid2X2, Images, LayoutList, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { AudioLines, Check, Grid2X2, Images, LayoutList, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { api } from '../api'
 import type { Collection } from '../types'
@@ -51,7 +51,7 @@ export function LibraryPage() {
           {search ? <button onClick={() => setSearch('')} type="button" aria-label="清空搜索"><X size={15} /></button> : null}
         </label>
         <div className="segmented-control" aria-label="媒体类型">
-          {[['all', '全部'], ['image', '图片'], ['video', '视频']].map(([value, label]) => (
+          {[['all', '全部'], ['image', '图片'], ['video', '视频'], ['audio', '音频']].map(([value, label]) => (
             <button className={mediaType === value ? 'is-active' : ''} key={value} onClick={() => setMediaType(value)} type="button">{label}</button>
           ))}
         </div>
@@ -124,7 +124,8 @@ function MediaItem({ item, selected, view, onSelect, onOpen }: MediaItemProps) {
     <article className={`media-item ${selected ? 'is-selected' : ''}`}>
       <button className="media-preview" onClick={onOpen} type="button" aria-label={`预览 ${item.title}`}>
         {item.cover_asset_id ? <img src={`oml-media://asset/${item.cover_asset_id}/thumbnail`} alt="" loading="lazy" /> : <span><Images /></span>}
-        {item.media_type === 'video' ? <i className="play-indicator"><Play size={16} fill="currentColor" /></i> : null}
+        {item.media_type === 'video' || item.media_type === 'mixed' ? <i className="play-indicator"><Play size={16} fill="currentColor" /></i> : null}
+        {item.media_type === 'audio' ? <i className="play-indicator"><AudioLines size={16} /></i> : null}
         {item.item_count > 1 ? <span className="item-count"><Images size={13} />{item.item_count}</span> : null}
       </button>
       <button className="item-selector" onClick={onSelect} type="button" aria-label={selected ? '取消选择' : '选择'}>

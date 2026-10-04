@@ -13,8 +13,9 @@
 | Radix UI | 无障碍对话框与提示组件 | MIT |
 | Lucide React | 界面图标 | ISC |
 | Zod | IPC 输入校验 | MIT |
+| FFmpeg | 视频音频提取 | GPLv3（随 `@ffmpeg-installer/win32-x64` 分发） |
 | Tailwind CSS | 样式构建 | MIT |
 | TypeScript | 类型系统与编译 | Apache-2.0 |
 | Vitest / Playwright | 自动化测试 | MIT / Apache-2.0 |
 
-Microsoft Edge、Google Chrome、抖音及其商标不属于本项目。安装包不包含浏览器、FFmpeg、登录凭据或下载内容。
+Microsoft Edge、Google Chrome、抖音及其商标不属于本项目。安装包不包含浏览器、登录凭据或下载内容；FFmpeg 按其原始许可证随安装包提供。

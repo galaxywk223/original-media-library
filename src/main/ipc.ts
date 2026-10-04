@@ -7,7 +7,7 @@ const id = z.string().regex(/^[a-f0-9]{32}$/i)
 const parseRequest = z.object({ text: z.string().min(1) })
 const createJobsRequest = z.object({ urls: z.array(z.string().url()).min(1), force: z.boolean() })
 const libraryQuery = z.object({
-  search: z.string(), media_type: z.enum(['all', 'image', 'video']), sort: z.enum(['newest', 'oldest', 'name', 'size']),
+  search: z.string(), media_type: z.enum(['all', 'image', 'video', 'audio']), sort: z.enum(['newest', 'oldest', 'name', 'size']),
   page: z.number().int().positive().optional(), page_size: z.number().int().min(1).max(200).optional(),
 })
 
@@ -22,6 +22,10 @@ export function registerIpc(services: AppServices, updates: UpdateManager): void
   ipcMain.handle('jobs:retry', (_, payload) => services.jobs.retry(z.object({ id }).parse(payload).id))
   ipcMain.handle('library:list', (_, payload) => services.queryLibrary(libraryQuery.parse(payload)))
   ipcMain.handle('library:get', (_, payload) => services.getCollection(z.object({ id }).parse(payload).id))
+  ipcMain.handle('audio:extract', (_, payload) => {
+    const input = z.object({ collectionId: id, assetId: id }).parse(payload)
+    return services.extractAudio(input.collectionId, input.assetId)
+  })
   ipcMain.handle('library:rename', (_, payload) => {
     const input = z.object({ id, title: z.string().min(1).max(120) }).parse(payload)
     return services.renameCollection(input.id, input.title)

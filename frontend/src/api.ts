@@ -19,6 +19,7 @@ export const api = {
     search: query.get('search') ?? '', media_type: query.get('media_type') ?? 'all', sort: query.get('sort') ?? 'newest',
   })),
   collection: (id: string) => call<Collection>(() => window.originalMedia.collection(id)),
+  extractAudio: (collectionId: string, assetId: string) => call<Collection>(() => window.originalMedia.extractAudio(collectionId, assetId)),
   renameCollection: (id: string, title: string) => call<Collection>(() => window.originalMedia.renameCollection(id, title)),
   libraryAction: (action: 'open' | 'reveal' | 'trash', ids: string[]) => call<{ affected: number }>(() => window.originalMedia.libraryAction(action, ids)),
   settings: () => call<Settings>(window.originalMedia.settings),

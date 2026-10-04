@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, ExternalLink, FolderOpen, Pencil, Trash2, X } from 'lucide-react'
+import { AudioLines, ChevronLeft, ChevronRight, ExternalLink, FolderOpen, Pencil, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api'
 
@@ -39,6 +39,13 @@ export function MediaViewer({ collectionId, onClose }: MediaViewerProps) {
       void queryClient.invalidateQueries({ queryKey: ['collection', collectionId] })
     },
   })
+  const extractAudio = useMutation({
+    mutationFn: () => api.extractAudio(collectionId!, asset!.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['library'] })
+      void queryClient.invalidateQueries({ queryKey: ['collection', collectionId] })
+    },
+  })
 
   const assets = detail.data?.assets ?? []
   const asset = assets[index]
@@ -63,6 +70,9 @@ export function MediaViewer({ collectionId, onClose }: MediaViewerProps) {
             {asset?.kind === 'image' ? (
               <img src={`oml-media://asset/${asset.id}/content`} alt={detail.data?.title || asset.filename} />
             ) : null}
+            {asset?.kind === 'audio' ? (
+              <div className="audio-stage"><AudioLines size={48} /><audio controls autoPlay src={`oml-media://asset/${asset.id}/content`} /></div>
+            ) : null}
             {!asset && !detail.isLoading ? <p className="viewer-empty">媒体文件不存在</p> : null}
             {assets.length > 1 ? (
               <>
@@ -84,7 +94,7 @@ export function MediaViewer({ collectionId, onClose }: MediaViewerProps) {
           </div>
           <aside className="viewer-info">
             <div className="viewer-topline">
-              <span className="media-kind">{detail.data?.media_type === 'video' ? '视频' : detail.data?.item_count ? `${detail.data.item_count} 张图片` : '媒体'}</span>
+              <span className="media-kind">{asset?.kind === 'video' ? '视频' : asset?.kind === 'audio' ? '音频' : detail.data?.item_count ? `${detail.data.item_count} 张图片` : '媒体'}</span>
               <Dialog.Close className="icon-button" aria-label="关闭"><X size={20} /></Dialog.Close>
             </div>
             {renaming ? (
@@ -108,12 +118,17 @@ export function MediaViewer({ collectionId, onClose }: MediaViewerProps) {
               </dl>
             ) : null}
             <div className="viewer-actions">
+              {asset?.kind === 'video' ? (
+                <button className="secondary-button" onClick={() => extractAudio.mutate()} disabled={extractAudio.isPending} type="button">
+                  <AudioLines size={16} />{extractAudio.isPending ? '提取中…' : '提取音频'}
+                </button>
+              ) : null}
               <button className="secondary-button" onClick={() => action.mutate({ name: 'open' })} type="button"><ExternalLink size={16} />打开</button>
               <button className="secondary-button" onClick={() => action.mutate({ name: 'reveal' })} type="button"><FolderOpen size={16} />定位</button>
               <button className="danger-button" onClick={() => action.mutate({ name: 'trash' })} type="button"><Trash2 size={16} />移入回收站</button>
             </div>
-            {(detail.error || action.error || rename.error) ? (
-              <p className="inline-error">{(detail.error || action.error || rename.error)?.message}</p>
+            {(detail.error || action.error || rename.error || extractAudio.error) ? (
+              <p className="inline-error">{(detail.error || action.error || rename.error || extractAudio.error)?.message}</p>
             ) : null}
           </aside>
         </Dialog.Content>

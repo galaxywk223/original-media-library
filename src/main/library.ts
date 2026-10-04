@@ -8,7 +8,8 @@ import { AppDatabase, sqliteNow, toIso } from './database'
 
 const IMAGES = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'])
 const VIDEOS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.m4v'])
-const ALL_MEDIA = new Set([...IMAGES, ...VIDEOS])
+const AUDIOS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.flac'])
+const ALL_MEDIA = new Set([...IMAGES, ...VIDEOS, ...AUDIOS])
 const SEQUENCE = /^(.*)_(\d{2,3})$/
 const INVALID_FILENAME = /[<>:"/\\|?*\r\n]+/g
 
@@ -18,7 +19,7 @@ interface PreparedAsset {
   id: string
   path: string
   filename: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'audio'
   mimeType: string
   extension: string
   size: number
@@ -44,12 +45,14 @@ function id(): string {
   return randomUUID().replaceAll('-', '')
 }
 
-function mimeFor(path: string, kind: 'image' | 'video'): string {
+function mimeFor(path: string, kind: 'image' | 'video' | 'audio'): string {
   const ext = extname(path).toLowerCase()
   const known: Record<string, string> = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
     '.gif': 'image/gif', '.bmp': 'image/bmp', '.avif': 'image/avif', '.mp4': 'video/mp4',
     '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.m4v': 'video/x-m4v',
+    '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg', '.flac': 'audio/flac',
   }
   return known[ext] ?? `${kind}/*`
 }
@@ -204,6 +207,45 @@ export class LibraryService {
     })
   }
 
+  async addExtractedAudio(
+    collectionId: string,
+    sourceAssetId: string,
+    root: string,
+    convert: (sourcePath: string, outputPath: string) => Promise<void>,
+  ): Promise<Collection> {
+    return this.serialize(async () => {
+      const collection = this.getCollection(collectionId)
+      const source = collection.assets?.find((asset) => asset.id === sourceAssetId)
+      if (!source) throw new Error('源媒体文件不存在')
+      if (source.kind !== 'video') throw new Error('只能从视频提取音频')
+      const sourcePath = this.assetPath(sourceAssetId, root)
+      const outputPath = join(dirname(sourcePath), `${basename(sourcePath, extname(sourcePath))}.mp3`)
+      this.requireInside(outputPath, root)
+      const existing = this.database.connection.prepare('SELECT * FROM media_assets WHERE LOWER(path) = LOWER(?)').get(resolve(outputPath)) as Row | undefined
+      if (existing) {
+        if (String(existing.collection_id) !== collectionId || existing.kind !== 'audio') throw new MediaPathConflictError('音频文件已存在于其他作品')
+        return this.getCollection(collectionId)
+      }
+      try {
+        await stat(outputPath)
+        throw new MediaPathConflictError('音频输出文件已存在，未覆盖')
+      } catch (error) {
+        if (error instanceof MediaPathConflictError) throw error
+      }
+      const sequence = Math.max(0, ...(collection.assets ?? []).map((asset) => asset.sequence)) + 1
+      await convert(sourcePath, outputPath)
+      try {
+        await this.insertAsset(collectionId, outputPath, sequence)
+      } catch (error) {
+        await unlink(outputPath).catch(() => undefined)
+        throw error
+      }
+      this.cleanupCollections()
+      this.notify()
+      return this.getCollection(collectionId)
+    })
+  }
+
   async recoverIndexedDownload(input: IndexedDownloadRecovery): Promise<Collection | null> {
     return this.serialize(async () => {
       const db = this.database.connection
@@ -267,6 +309,11 @@ export class LibraryService {
     if (query.media_type === 'image' || query.media_type === 'video') {
       conditions.push('media_type = ?')
       params.push(query.media_type)
+    } else if (query.media_type === 'audio') {
+      conditions.push(`(media_type = 'audio' OR EXISTS (
+        SELECT 1 FROM media_assets audio_assets
+        WHERE audio_assets.collection_id = media_collections.id AND audio_assets.kind = 'audio'
+      ))`)
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
     const order = query.sort === 'oldest' ? 'created_at ASC' : query.sort === 'name' ? 'title COLLATE NOCASE ASC'
@@ -384,7 +431,7 @@ export class LibraryService {
   private async prepareAsset(path: string, sequence: number): Promise<PreparedAsset> {
     const info = await stat(path)
     const extension = extname(path).toLowerCase()
-    const kind: 'image' | 'video' = IMAGES.has(extension) ? 'image' : 'video'
+    const kind: 'image' | 'video' | 'audio' = IMAGES.has(extension) ? 'image' : AUDIOS.has(extension) ? 'audio' : 'video'
     const assetId = id()
     let width: number | null = null
     let height: number | null = null
@@ -461,9 +508,12 @@ export class LibraryService {
     return result
   }
 
-  private collectionType(paths: string[]): 'image' | 'video' | 'mixed' {
-    const kinds = new Set(paths.map((path) => IMAGES.has(extname(path).toLowerCase()) ? 'image' : 'video'))
-    return kinds.size === 1 ? [...kinds][0] as 'image' | 'video' : 'mixed'
+  private collectionType(paths: string[]): 'image' | 'video' | 'audio' | 'mixed' {
+    const kinds = new Set(paths.map((path) => {
+      const extension = extname(path).toLowerCase()
+      return IMAGES.has(extension) ? 'image' : AUDIOS.has(extension) ? 'audio' : 'video'
+    }))
+    return kinds.size === 1 ? [...kinds][0] as 'image' | 'video' | 'audio' : 'mixed'
   }
 
   private inside(path: string, root: string): boolean {

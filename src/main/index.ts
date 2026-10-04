@@ -104,6 +104,7 @@ async function start(): Promise<void> {
   const paths = await buildPaths()
   services = new AppServices(paths)
   await services.initialize()
+  if (!services.audio.isAvailable()) throw new Error('FFmpeg 转换引擎不可用')
   if (process.argv.includes('--self-test')) {
     const settings = await services.settings()
     process.stdout.write(`${JSON.stringify({ status: 'ok', database: paths.database, settings })}\n`)

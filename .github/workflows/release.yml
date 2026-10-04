@@ -17,6 +17,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run verify:ffmpeg
       - run: npm test
       - run: npm run dist
       - uses: softprops/action-gh-release@v2

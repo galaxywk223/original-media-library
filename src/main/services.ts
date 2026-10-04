@@ -4,6 +4,7 @@ import { watch, type FSWatcher } from 'node:fs'
 import type { CreateJobResult, LibraryQuery, ParsedSource, Settings } from '../shared/contracts'
 import { AppDatabase, sqliteNow } from './database'
 import { BrowserDownloader } from './downloader'
+import { AudioExtractor } from './audio'
 import { JobManager } from './jobs'
 import { LibraryService } from './library'
 import { extractAwemeId, extractUrls, isSupportedSource, normalizeSourceUrl } from './parser'
@@ -14,6 +15,7 @@ type Row = Record<string, any>
 export class AppServices {
   readonly database: AppDatabase
   readonly downloader: BrowserDownloader
+  readonly audio: AudioExtractor
   readonly library: LibraryService
   readonly jobs: JobManager
   private watcher: FSWatcher | null = null
@@ -23,6 +25,7 @@ export class AppServices {
   constructor(readonly paths: AppPaths) {
     this.database = new AppDatabase(paths.database)
     this.downloader = new BrowserDownloader(paths)
+    this.audio = new AudioExtractor()
     this.library = new LibraryService(this.database, paths, () => this.notify())
     this.jobs = new JobManager(this.database, this.downloader, this.library, () => this.notify())
   }
@@ -86,6 +89,9 @@ export class AppServices {
 
   queryLibrary(query: LibraryQuery) { return this.library.query(query) }
   getCollection(id: string) { return this.library.getCollection(id) }
+  extractAudio(collectionId: string, assetId: string) {
+    return this.library.addExtractedAudio(collectionId, assetId, String(this.settingsRow().download_dir), (sourcePath, outputPath) => this.audio.extract(sourcePath, outputPath))
+  }
   renameCollection(id: string, title: string) { return this.library.renameCollection(id, title, String(this.settingsRow().download_dir)) }
   libraryAction(action: 'open' | 'reveal' | 'trash', ids: string[]) {
     return this.library.act(action, ids, String(this.settingsRow().download_dir))
