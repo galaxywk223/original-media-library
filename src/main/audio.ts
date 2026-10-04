@@ -26,7 +26,7 @@ export class AudioExtractor {
   }
 
   async extract(sourcePath: string, outputPath: string): Promise<void> {
-    const temporaryPath = `${outputPath}.part`
+    const temporaryPath = outputPath.replace(/\.mp3$/i, '.part.mp3')
     await unlink(temporaryPath).catch(() => undefined)
     const child = this.spawnProcess(sourcePath, temporaryPath)
     let stderr = ''

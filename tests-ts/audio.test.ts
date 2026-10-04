@@ -52,13 +52,14 @@ describe('AudioExtractor', () => {
     directories.push(root)
     const source = join(root, 'video.mp4')
     const output = join(root, 'video.mp3')
+    const temporary = join(root, 'video.part.mp3')
     await writeFile(source, Buffer.from('video'))
     const spawnMock = vi.fn((_: string, args: string[]) => fakeChild(0, args.at(-1)!))
     const spawn = spawnMock as unknown as NonNullable<AudioExtractorDependencies['spawn']>
     await new AudioExtractor({ ffmpegPath: 'ffmpeg.exe', spawn }).extract(source, output)
     expect(await readFile(output)).toEqual(Buffer.from('id3'))
-    await expect(stat(`${output}.part`)).rejects.toThrow()
-    expect(spawnMock).toHaveBeenCalledWith('ffmpeg.exe', expect.arrayContaining(['-vn', '-codec:a', 'libmp3lame', '-b:a', '192k', `${output}.part`]), expect.any(Object))
+    await expect(stat(temporary)).rejects.toThrow()
+    expect(spawnMock).toHaveBeenCalledWith('ffmpeg.exe', expect.arrayContaining(['-vn', '-codec:a', 'libmp3lame', '-b:a', '192k', temporary]), expect.any(Object))
   })
 
   test('cleans the temporary output when FFmpeg fails', async () => {
@@ -66,10 +67,11 @@ describe('AudioExtractor', () => {
     directories.push(root)
     const source = join(root, 'video.mp4')
     const output = join(root, 'video.mp3')
+    const temporary = join(root, 'video.part.mp3')
     await writeFile(source, Buffer.from('video'))
     const spawn = vi.fn(() => fakeChild(1, output, 'invalid input')) as unknown as NonNullable<AudioExtractorDependencies['spawn']>
     await expect(new AudioExtractor({ ffmpegPath: 'ffmpeg.exe', spawn }).extract(source, output)).rejects.toThrow('invalid input')
-    await expect(stat(`${output}.part`)).rejects.toThrow()
+    await expect(stat(temporary)).rejects.toThrow()
     await expect(stat(output)).rejects.toThrow()
   })
 })

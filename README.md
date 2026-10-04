@@ -25,10 +25,10 @@
 最新安装包位于 [GitHub Releases](https://github.com/galaxywk223/original-media-library/releases/latest)：
 
 ```text
-MediaDownloader-Setup-1.2.1.exe
+MediaDownloader-Setup-1.2.2.exe
 ```
 
-`v1.2.1` 修复已安装版本提取音频时 FFmpeg 路径解析错误。
+`v1.2.2` 修复音频提取临时文件扩展名导致 FFmpeg 无法识别 MP3 输出格式的问题。
 
 安装包未进行商业代码签名，Windows SmartScreen 可能显示未知发布者提示。安装范围为当前用户，卸载时保留应用数据和已下载媒体。
 
