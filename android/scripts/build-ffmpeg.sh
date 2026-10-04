@@ -8,7 +8,7 @@ project_dir="$(cd "$(dirname "$0")/.." && pwd)"
 build_dir="${FFMPEG_BUILD_DIR:-$project_dir/.native-build/ffmpeg-kit}"
 commit=d6be56d7aec286eb3c292d6b23ff07a6b70d8693
 
-for tool in git make gcc autoconf automake libtoolize pkg-config nasm yasm gperf groff java; do
+for tool in git make gcc autoconf automake libtoolize pkg-config nasm yasm gperf groff java curl; do
     command -v "$tool" >/dev/null || { echo "Missing build tool: $tool" >&2; exit 1; }
 done
 test -x "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
