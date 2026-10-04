@@ -8,8 +8,8 @@ export interface AudioExtractorDependencies {
   spawn?: typeof defaultSpawn
 }
 
-function unpackedPath(path: string): string {
-  return path.replace(/app[\\/]asar([\\/])/i, 'app.asar.unpacked$1')
+export function resolveFfmpegPath(path: string): string {
+  return path.replace(/app\.asar([\\/])/i, 'app.asar.unpacked$1')
 }
 
 export class AudioExtractor {
@@ -17,7 +17,7 @@ export class AudioExtractor {
   private readonly spawn: typeof defaultSpawn
 
   constructor(dependencies: AudioExtractorDependencies = {}) {
-    this.ffmpegPath = unpackedPath(dependencies.ffmpegPath ?? ffmpeg.path)
+    this.ffmpegPath = resolveFfmpegPath(dependencies.ffmpegPath ?? ffmpeg.path)
     this.spawn = dependencies.spawn ?? defaultSpawn
   }
 

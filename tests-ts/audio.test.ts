@@ -1,12 +1,12 @@
 // @vitest-environment node
 
 import { EventEmitter } from 'node:events'
-import { stat, writeFile, readFile, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, stat, writeFile, readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { AudioExtractor, type AudioExtractorDependencies } from '../src/main/audio'
+import { AudioExtractor, resolveFfmpegPath, type AudioExtractorDependencies } from '../src/main/audio'
 
 const directories: string[] = []
 
@@ -28,6 +28,25 @@ function fakeChild(exitCode: number, outputPath: string, stderrText = ''): Child
 }
 
 describe('AudioExtractor', () => {
+  test('resolves packaged FFmpeg from app.asar.unpacked', async () => {
+    expect(resolveFfmpegPath('C:\\Program Files\\original-media-library\\resources\\app.asar\\node_modules\\ffmpeg.exe'))
+      .toBe('C:\\Program Files\\original-media-library\\resources\\app.asar.unpacked\\node_modules\\ffmpeg.exe')
+    expect(resolveFfmpegPath('C:/Program Files/original-media-library/resources/app.asar/node_modules/ffmpeg.exe'))
+      .toBe('C:/Program Files/original-media-library/resources/app.asar.unpacked/node_modules/ffmpeg.exe')
+    expect(resolveFfmpegPath('D:\\Code\\Apps\\video-downloader\\node_modules\\ffmpeg.exe'))
+      .toBe('D:\\Code\\Apps\\video-downloader\\node_modules\\ffmpeg.exe')
+  })
+
+  test('reports a packaged FFmpeg binary as available', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'oml-ffmpeg-path-'))
+    directories.push(root)
+    const packagedPath = join(root, 'resources', 'app.asar', 'node_modules', 'ffmpeg.exe')
+    const unpackedPath = packagedPath.replace('app.asar', 'app.asar.unpacked')
+    await mkdir(dirname(unpackedPath), { recursive: true })
+    await writeFile(unpackedPath, Buffer.from('ffmpeg'))
+    expect(new AudioExtractor({ ffmpegPath: packagedPath }).isAvailable()).toBe(true)
+  })
+
   test('extracts MP3 to an atomic output path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'oml-audio-'))
     directories.push(root)
