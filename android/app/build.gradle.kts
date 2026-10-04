@@ -17,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -46,11 +47,13 @@ android {
 android.applicationVariants.all {
     outputs.all {
         @Suppress("UnstableApiUsage")
-        (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = "MediaDownloader-Android-1.0.0.apk"
+        (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = if (name.contains("debug")) "MediaDownloader-Android-1.0.0-debug.apk" else "MediaDownloader-Android-1.0.0.apk"
     }
 }
 
 dependencies {
+    implementation(files("libs/ffmpeg-kit.aar"))
+    implementation("com.arthenica:smart-exception-java:0.2.1")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.compose.material3:material3")
@@ -70,5 +73,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.11.0")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.work:work-testing:2.10.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

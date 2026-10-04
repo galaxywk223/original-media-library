@@ -46,7 +46,9 @@ class MainViewModel(private val repository: MediaRepository) : ViewModel() {
     var loading by mutableStateOf(false)
         private set
 
-    init { refreshJobs() }
+    init {
+        viewModelScope.launch { repository.observeJobs().collect { jobs = it } }
+    }
     fun refreshJobs() { viewModelScope.launch { jobs = repository.jobs() } }
     fun resolveAndQueue(text: String) {
         if (text.isBlank()) return
@@ -58,12 +60,16 @@ class MainViewModel(private val repository: MediaRepository) : ViewModel() {
         }
     }
     fun extractAudio(collection: CollectionEntity, asset: AssetEntity) {
-        viewModelScope.launch { message = repository.extractAudio(collection, asset).fold({ "音频提取完成" }, { it.message ?: "音频提取失败" }) }
+        viewModelScope.launch { message = repository.extractAudio(collection, asset).fold({ "音频提取任务已排队" }, { it.message ?: "音频提取失败" }) }
     }
     fun extractFirstVideoAudio(collection: CollectionEntity) {
-        viewModelScope.launch { message = repository.extractFirstVideoAudio(collection).fold({ "音频提取完成" }, { it.message ?: "音频提取失败" }) }
+        viewModelScope.launch { message = repository.extractFirstVideoAudio(collection).fold({ "音频提取任务已排队" }, { it.message ?: "音频提取失败" }) }
     }
     fun clearMessage() { message = null }
+    fun cancelAudio(job: JobEntity) { viewModelScope.launch { repository.cancel(job.id) } }
+    fun retryAudio(job: JobEntity) {
+        viewModelScope.launch { message = runCatching { repository.retry(job.id); "重试任务已排队" }.getOrElse { it.message } }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -144,6 +150,13 @@ private fun TasksScreen(viewModel: MainViewModel) {
     else LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(viewModel.jobs) { job ->
             ListItem(headlineContent = { Text(job.title) }, supportingContent = { Text("${job.status} · ${job.progress}%${job.error?.let { " · $it" } ?: ""}") })
+            if (job.sourceUrl.startsWith("oml-audio://")) {
+                if (job.status == "queued" || job.status == "extracting") {
+                    TextButton(onClick = { viewModel.cancelAudio(job) }) { Text("取消提取") }
+                } else if (job.status == "failed" || job.status == "cancelled") {
+                    TextButton(onClick = { viewModel.retryAudio(job) }) { Text("重试提取") }
+                }
+            }
             HorizontalDivider()
         }
     }
@@ -156,7 +169,8 @@ private fun SettingsScreen(app: MediaDownloaderApplication, onLogin: () -> Unit)
         Text("设置", style = MaterialTheme.typography.titleLarge)
         ListItem(headlineContent = { Text("抖音登录") }, supportingContent = { Text(if (app.session.loggedIn()) "已配置登录 Cookie" else "未配置登录") }, trailingContent = { Button(onClick = onLogin) { Text(if (app.session.loggedIn()) "重新登录" else "配置登录") } })
         ListItem(headlineContent = { Text("下载目录") }, supportingContent = { Text(context.getExternalFilesDir("media")?.absolutePath ?: "不可用") })
-        ListItem(headlineContent = { Text("版本") }, supportingContent = { Text("Android 1.0.0") })
+        ListItem(headlineContent = { Text("音频转换引擎") }, supportingContent = { Text(AndroidAudioEngine.version()?.let { "FFmpeg $it · MP3 192 kbps" } ?: "FFmpeg 不可用") })
+        ListItem(headlineContent = { Text("版本") }, supportingContent = { Text("Android ${BuildConfig.VERSION_NAME}") })
     }
 }
 

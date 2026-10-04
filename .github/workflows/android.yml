@@ -26,11 +26,40 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y autoconf automake libtool pkg-config nasm yasm gperf groff gettext texinfo bison flex
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;25.2.9519653"
+      - uses: actions/cache@v4
+        with:
+          path: android/.native-build
+          key: ffmpeg-kit-v6.0-gpl-lame-api24-ndk25-${{ runner.os }}-${{ hashFiles('android/scripts/build-ffmpeg.sh') }}
+      - name: Build local FFmpegKit AAR
+        run: |
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/25.2.9519653"
+          bash scripts/build-ffmpeg.sh
+      - name: Configure optional release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            umask 077
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > media-downloader-release.jks
+            printf 'storeFile=media-downloader-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+          fi
       - run: chmod +x gradlew
       - run: ./gradlew test assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: media-downloader-android-debug
+          name: media-downloader-android-apks
           path: |
             android/app/build/outputs/apk/debug/*.apk
             android/app/build/outputs/apk/release/*.apk
+      - name: Remove signing files
+        if: always()
+        run: rm -f media-downloader-release.jks keystore.properties

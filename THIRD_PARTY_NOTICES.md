@@ -14,6 +14,7 @@
 | Lucide React | 界面图标 | ISC |
 | Zod | IPC 输入校验 | MIT |
 | FFmpeg | 视频音频提取 | GPLv3（随 `@ffmpeg-installer/win32-x64` 分发） |
+| FFmpegKit / FFmpeg / LAME | Android MP3 音频提取 | GPLv3（由 Android 本地 AAR 构建提供） |
 | Tailwind CSS | 样式构建 | MIT |
 | TypeScript | 类型系统与编译 | Apache-2.0 |
 | Vitest / Playwright | 自动化测试 | MIT / Apache-2.0 |

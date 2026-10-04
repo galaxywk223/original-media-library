@@ -22,6 +22,9 @@ release/
 downloads/
 downloads-test*/
 android/.gradle/
+android/.kotlin/
+android/app/libs/*.aar
+android/.native-build/
 android/build/
 android/app/build/
 android/local.properties

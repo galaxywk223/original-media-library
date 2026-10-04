@@ -3,9 +3,6 @@ package com.galaxywk.originalmedialibrary.android
 import android.content.Context
 import android.media.MediaScannerConnection
 import androidx.work.*
-import android.media.MediaExtractor
-import android.media.MediaFormat
-import android.media.MediaMuxer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -21,6 +18,7 @@ class MediaRepository(private val context: Context, private val database: MediaD
     private val client = OkHttpClient()
 
     fun collections(): Flow<List<CollectionEntity>> = dao.observeCollections()
+    fun observeJobs(): Flow<List<JobEntity>> = dao.observeJobs()
     suspend fun jobs(): List<JobEntity> = dao.jobs()
     suspend fun resolveAndQueue(text: String): Int {
         val works = resolver.resolve(text)
@@ -36,8 +34,20 @@ class MediaRepository(private val context: Context, private val database: MediaD
         }
         return works.size
     }
-    fun cancel(jobId: String) { workManager.cancelAllWorkByTag("download:$jobId") }
-    fun retry(jobId: String) { workManager.cancelAllWorkByTag("download:$jobId") }
+    suspend fun cancel(jobId: String) = withContext(Dispatchers.IO) {
+        workManager.cancelAllWorkByTag("download:$jobId").result.get()
+        workManager.cancelAllWorkByTag("audio:$jobId").result.get()
+        dao.updateJob(jobId, "cancelled", 0)
+    }
+    suspend fun retry(jobId: String) {
+        val job = dao.job(jobId) ?: error("任务不存在")
+        require(job.sourceUrl.startsWith("oml-audio://")) { "该任务不是音频提取任务" }
+        val ids = job.sourceUrl.removePrefix("oml-audio://").split('/')
+        require(ids.size == 2) { "音频任务参数缺失" }
+        val collection = dao.collection(ids[0]) ?: error("作品不存在")
+        val asset = dao.asset(ids[1]) ?: error("视频不存在")
+        extractAudio(collection, asset).getOrThrow()
+    }
     suspend fun rename(collection: CollectionEntity, title: String) = dao.rename(collection.id, title.trim().ifBlank { collection.title })
     suspend fun extractFirstVideoAudio(collection: CollectionEntity): Result<Unit> {
         val asset = dao.assets(collection.id).firstOrNull { it.kind == "video" } ?: return Result.failure(IllegalStateException("作品中没有视频"))
@@ -46,48 +56,16 @@ class MediaRepository(private val context: Context, private val database: MediaD
     suspend fun extractAudio(collection: CollectionEntity, asset: AssetEntity): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             require(asset.kind == "video") { "只能从视频提取音频" }
-            val input = File(asset.path)
-            check(input.exists()) { "视频文件不存在" }
-            val output = File(input.parentFile, input.nameWithoutExtension + ".m4a")
-            if (output.exists()) return@runCatching
-            val temporary = File(input.parentFile, input.nameWithoutExtension + ".part.m4a")
-            temporary.delete()
-            extractAudioTrack(input, temporary)
-            check(temporary.exists()) { "音频输出文件不存在" }
-            check(temporary.renameTo(output)) { "音频文件写入失败" }
-            MediaScannerConnection.scanFile(context, arrayOf(output.absolutePath), arrayOf("audio/mp4"), null)
-            val audio = AssetEntity(UUID.randomUUID().toString(), collection.id, output.absolutePath, output.name, "audio", "audio/mp4", output.length(), asset.sequence + 1)
-            dao.insertAssets(listOf(audio))
-        }
-    }
-
-    private fun extractAudioTrack(input: File, output: File) {
-        val extractor = MediaExtractor()
-        extractor.setDataSource(input.absolutePath)
-        val track = (0 until extractor.trackCount).firstOrNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
-            ?: error("视频中没有音频轨道")
-        extractor.selectTrack(track)
-        val format = extractor.getTrackFormat(track)
-        val muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        val outputTrack = muxer.addTrack(format)
-        muxer.start()
-        val buffer = java.nio.ByteBuffer.allocate(1024 * 1024)
-        val info = android.media.MediaCodec.BufferInfo()
-        try {
-            while (true) {
-                val size = extractor.readSampleData(buffer, 0)
-                if (size < 0) break
-                info.offset = 0
-                info.size = size
-                info.presentationTimeUs = extractor.sampleTime
-                info.flags = extractor.sampleFlags
-                muxer.writeSampleData(outputTrack, buffer, info)
-                extractor.advance()
-                buffer.clear()
-            }
-        } finally {
-            muxer.stop(); muxer.release(); extractor.release()
-        }
+            require(asset.collectionId == collection.id) { "文件不属于当前作品" }
+            val jobId = UUID.randomUUID().toString()
+            val request = OneTimeWorkRequestBuilder<AudioExtractionWorker>()
+                .setInputData(workDataOf("collectionId" to collection.id, "assetId" to asset.id, "jobId" to jobId))
+                .addTag("audio:$jobId")
+                .build()
+            dao.insertJob(JobEntity(jobId, "oml-audio://${collection.id}/${asset.id}", "提取音频：${collection.title}", workId = request.id.toString()))
+            workManager.enqueueUniqueWork("audio-extraction", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+            Unit
+        }.let { result -> result.map { Unit } }
     }
 }
 

@@ -33,6 +33,12 @@ interface MediaDao {
     suspend fun collection(id: String): CollectionEntity?
     @Query("SELECT * FROM media_assets WHERE collectionId = :id ORDER BY sequence")
     suspend fun assets(id: String): List<AssetEntity>
+    @Query("SELECT * FROM media_assets WHERE id = :id") suspend fun asset(id: String): AssetEntity?
+    @Query("SELECT * FROM download_jobs WHERE id = :id") suspend fun job(id: String): JobEntity?
+    @Query("UPDATE media_collections SET mediaType = :type, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateMediaType(id: String, type: String, updatedAt: Long = System.currentTimeMillis())
+    @Query("SELECT * FROM download_jobs ORDER BY createdAt DESC")
+    fun observeJobs(): kotlinx.coroutines.flow.Flow<List<JobEntity>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertCollection(value: CollectionEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAssets(values: List<AssetEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertJob(value: JobEntity)
