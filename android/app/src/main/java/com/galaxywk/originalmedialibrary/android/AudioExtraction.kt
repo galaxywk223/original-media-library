@@ -6,6 +6,10 @@ import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import androidx.work.WorkManager
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
+import com.google.gson.Gson
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.ReturnCode
@@ -50,15 +54,16 @@ object AndroidAudioEngine {
 }
 
 class AudioExtractionService(private val context: Context, private val database: MediaDatabase) {
-    companion object { private val lock = Mutex() }
+    companion object { private val lock get() = LibraryRepository.mutations }
 
     suspend fun extract(collectionId: String, assetId: String): AssetEntity = lock.withLock {
         withContext(Dispatchers.IO) {
             val dao = database.dao()
             val collection = dao.collection(collectionId) ?: error("作品不存在")
+            check(collection.trashedAt == null) { "请先恢复回收站作品" }
             val source = dao.asset(assetId) ?: error("视频文件不存在")
             check(source.collectionId == collectionId && source.kind == "video") { "只能从当前作品的视频提取音频" }
-            val root = context.getExternalFilesDir("media")?.canonicalFile ?: error("媒体目录不可用")
+            val root = (context.applicationContext as MediaDownloaderApplication).storage.root
             val input = File(source.path).canonicalFile
             check(input.toPath().startsWith(root.toPath()) && input.isFile) { "视频不在媒体目录内或已不存在" }
             val output = File(input.parentFile, "${input.nameWithoutExtension}.mp3")
@@ -81,7 +86,6 @@ class AudioExtractionService(private val context: Context, private val database:
                     dao.insertAssets(listOf(audio))
                     dao.updateMediaType(collection.id, "mixed")
                 }
-                MediaScannerConnection.scanFile(context, arrayOf(output.absolutePath), arrayOf("audio/mpeg"), null)
                 audio
             } catch (error: Throwable) {
                 if (created) output.delete()
@@ -93,17 +97,39 @@ class AudioExtractionService(private val context: Context, private val database:
     }
 }
 
+class AudioExtractionRepository(private val context: Context, private val database: MediaDatabase) {
+    suspend fun queue(collectionId: String, assetId: String) {
+        val dao = database.dao()
+        val source = dao.asset(assetId) ?: error("视频不存在")
+        require(source.collectionId == collectionId && source.kind == "video") { "只能从当前作品的视频提取音频" }
+        val collection = dao.collection(collectionId) ?: error("作品不存在")
+        check(collection.trashedAt == null) { "请先恢复作品" }
+        val jobId = UUID.randomUUID().toString()
+        val request = OneTimeWorkRequestBuilder<AudioExtractionWorker>().setInputData(workDataOf("jobId" to jobId))
+            .addTag("job:$jobId").build()
+        dao.insertJob(JobEntity(jobId, "oml-audio://$collectionId/$assetId", "提取音频：${collection.title}",
+            workId = request.id.toString(), kind = "audio", payload = Gson().toJson(arrayOf(collectionId, assetId))))
+        WorkManager.getInstance(context).enqueueUniqueWork("audio-extraction", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+}
+
 class AudioExtractionWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as MediaDownloaderApplication
         val dao = app.database.dao()
         val jobId = inputData.getString("jobId") ?: return Result.failure()
-        val collectionId = inputData.getString("collectionId") ?: return Result.failure()
-        val assetId = inputData.getString("assetId") ?: return Result.failure()
+        val job = dao.job(jobId) ?: return Result.failure()
+        val values = if (job.payload.isNotBlank()) Gson().fromJson(job.payload, Array<String>::class.java) else null
+        val collectionId = values?.getOrNull(0) ?: inputData.getString("collectionId") ?: return Result.failure()
+        val assetId = values?.getOrNull(1) ?: inputData.getString("assetId") ?: return Result.failure()
         try {
+            setForeground(JobNotifications.foreground(app, job.title, id))
             dao.updateJob(jobId, "extracting", 1)
             AudioExtractionService(app, app.database).extract(collectionId, assetId)
             dao.updateJob(jobId, "completed", 100)
+            runCatching { app.library.export(collectionId) }.onFailure {
+                dao.updateJob(jobId, "completed", 100, "提取成功，导出失败：${it.message}")
+            }
             return Result.success()
         } catch (cancelled: CancellationException) {
             withContext(NonCancellable) { dao.updateJob(jobId, "cancelled", 0) }

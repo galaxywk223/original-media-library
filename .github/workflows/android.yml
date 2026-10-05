@@ -5,13 +5,14 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
+    tags:
+      - 'android-v*'
   pull_request:
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
-
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -30,7 +31,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y autoconf automake libtool pkg-config nasm yasm gperf groff gettext texinfo bison flex
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;25.2.9519653"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;25.2.9519653" "emulator" "platform-tools"
       - uses: actions/cache@v4
         with:
           path: android/.native-build
@@ -53,13 +54,32 @@ jobs:
             printf 'storeFile=media-downloader-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
           fi
       - run: chmod +x gradlew
-      - run: ./gradlew test assembleDebug assembleRelease
+      - run: ./gradlew lint test assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: media-downloader-android-apks
           path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+      - name: Generate checksums
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        run: |
+          cd app/build/outputs/apk/release
+          sha256sum MediaDownloader-Android-1.0.0.apk > MediaDownloader-Android-1.0.0.apk.sha256
+      - name: Publish Android release
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Android 素材下载器 ${{ github.ref_name }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+          files: |
+            android/app/build/outputs/apk/release/MediaDownloader-Android-1.0.0.apk
+            android/app/build/outputs/apk/release/MediaDownloader-Android-1.0.0.apk.sha256
+            PRIVACY-ANDROID.md
+            THIRD_PARTY_NOTICES.md
       - name: Remove signing files
         if: always()
         run: rm -f media-downloader-release.jks keystore.properties
